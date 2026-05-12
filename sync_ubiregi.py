@@ -233,7 +233,7 @@ def sync_checkouts(since=None, until=None, item_map=None, payment_map=None):
             "tax_amount":      total_tax,
             "total":           total_price,
             "discount_amount": to_f(raw.get("modifier", 0)),
-            "status":          raw.get("status", "close"),
+            "status":          "closed" if raw.get("status") in ("close", "closed") else (raw.get("status") or "closed"),
             "paid_at":         parse_dt(raw.get("paid_at") or raw.get("created_at")),
             "updated_at":      parse_dt(raw.get("updated_at")),
             "raw_data":        raw,
