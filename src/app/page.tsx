@@ -32,7 +32,7 @@ async function getDashboardData() {
   // 商品ランキング TOP5
   const { data: topItems } = await supabase
     .from('v_item_sales_ranking')
-    .select('menu_item_name, total_quantity, total_revenue, category_name')
+    .select('*')
     .order('total_revenue', { ascending: false })
     .limit(5)
 
