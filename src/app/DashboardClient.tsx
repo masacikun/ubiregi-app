@@ -82,9 +82,9 @@ function KpiCard({
   const t1 = trendBadge(trend1 ?? null)
   const t2 = trendBadge(trend2 ?? null)
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-1.5">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 p-5 flex flex-col gap-1.5">
       <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{label}</p>
-      <p className="text-2xl font-bold text-slate-800 leading-tight">{value}</p>
+      <p className="text-2xl font-bold text-slate-800 dark:text-gray-100 dark:text-gray-100 leading-tight">{value}</p>
       {sub && <p className="text-xs text-slate-400">{sub}</p>}
       {t1 && <p className={`text-xs font-semibold ${t1.up ? 'text-emerald-600' : 'text-red-500'}`}>{t1.str} {trend1Label}</p>}
       {t2 && <p className={`text-xs font-semibold ${t2.up ? 'text-blue-600' : 'text-slate-400'}`}>{t2.str} {trend2Label}</p>}
@@ -144,10 +144,10 @@ export default function DashboardClient({
     <div className={`max-w-6xl mx-auto space-y-6 transition-opacity duration-150 ${isPending ? 'opacity-50 pointer-events-none' : ''}`}>
 
       {/* 店舗 + 期間選択 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">ダッシュボード</h1>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-gray-100">ダッシュボード</h1>
             <p className="text-sm text-slate-400 mt-0.5">{selectedYear}年{selectedMonth}月</p>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -164,12 +164,12 @@ export default function DashboardClient({
         <div className="flex items-center gap-2 mt-5 flex-wrap">
           <select value={selectedYear} onChange={e => nav({ y: e.target.value, m: String(selectedMonth) })}
             disabled={isPending}
-            className="text-sm bg-white border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400">
+            className="text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400">
             {availableYears.map(y => <option key={y} value={y}>{y}年</option>)}
           </select>
           <select value={selectedMonth} onChange={e => nav({ m: e.target.value })}
             disabled={isPending}
-            className="text-sm bg-white border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400">
+            className="text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400">
             {MONTHS.map((label, i) => <option key={i + 1} value={i + 1}>{label}</option>)}
           </select>
           {isPending && (
@@ -197,7 +197,7 @@ export default function DashboardClient({
       </div>
 
       {/* 直近30日 日別売上（昨対比バッジ付き） */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 flex items-center gap-2">
             直近30日 日別売上
@@ -253,7 +253,7 @@ export default function DashboardClient({
       </div>
 
       {/* 月別売上推移 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 p-6">
         <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">{selectedYear}年 月別売上推移</h2>
         {yearMonthly.length === 0 ? (
           <p className="text-slate-400 text-sm text-center py-8">データがありません</p>
@@ -290,7 +290,7 @@ export default function DashboardClient({
           <div className="mt-6 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100">
+                <tr className="border-b border-slate-100 dark:border-gray-700">
                   <th className="text-left py-2 text-xs text-slate-400 font-medium">月</th>
                   <th className="text-right py-2 text-xs text-slate-400 font-medium">売上</th>
                   <th className="text-right py-2 text-xs text-slate-400 font-medium">前月比</th>
@@ -307,7 +307,7 @@ export default function DashboardClient({
                   const avg  = Number(row.checkout_count) > 0
                     ? Math.round(Number(row.total) / Number(row.checkout_count)) : 0
                   return (
-                    <tr key={String(row.sale_month)} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
+                    <tr key={String(row.sale_month)} className="border-b border-slate-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-900">
                       <td className="py-2 text-gray-600 dark:text-gray-400 text-sm">
                         {new Date(String(row.sale_month) + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
                       </td>
@@ -330,7 +330,7 @@ export default function DashboardClient({
       </div>
 
       {/* 売上ランキング（カテゴリタブ付き） */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400">
             売上ランキング TOP10 <span className="ml-1 text-xs font-normal text-slate-400">（直近データ）</span>
@@ -376,7 +376,7 @@ export default function DashboardClient({
 
       {/* 曜日別 + 時間帯別（17〜25時） */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 p-6">
           <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">曜日別売上 <span className="text-xs font-normal text-slate-400">（直近30日）</span></h2>
           {dowData.every(d => d.total === 0) ? (
             <p className="text-slate-400 text-sm text-center py-8">データがありません</p>
@@ -396,7 +396,7 @@ export default function DashboardClient({
           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 p-6">
           <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">
             時間帯別売上
             <span className="text-xs font-normal text-slate-400 ml-1">17〜翌1時（直近30日）</span>
@@ -424,7 +424,7 @@ export default function DashboardClient({
       </div>
 
       {/* 支払方法別 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-700 p-6">
         <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">支払方法別</h2>
         {paymentData.length === 0 ? (
           <p className="text-slate-400 text-sm text-center py-8">データがありません</p>
