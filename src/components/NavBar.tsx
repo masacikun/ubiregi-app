@@ -52,9 +52,15 @@ export default function NavBar() {
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-400 animate-pulse z-50" />
       )}
       <div className="w-full px-4 flex items-center justify-between h-14">
-        <Link href={makeHref('/')} className="font-bold text-base tracking-wide text-white hover:text-slate-200 transition-colors">
-          ユビレジ分析
-        </Link>
+        <div className="flex items-center gap-2">
+          <a href="/" className="font-bold text-sm text-sky-300 hover:text-sky-200 transition-colors shrink-0">
+            🏢 Smile 管理
+          </a>
+          <span className="text-slate-600 text-xs">›</span>
+          <Link href={makeHref('/')} className="font-bold text-base tracking-wide text-white hover:text-slate-200 transition-colors">
+            ユビレジ
+          </Link>
+        </div>
         <div className="flex items-center gap-3">
           {!isDashboard && (
             <select
