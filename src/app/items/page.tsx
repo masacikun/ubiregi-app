@@ -1,3 +1,4 @@
+export const metadata = { title: '商品分析 | ユビレジ分析' }
 export const dynamic = 'force-dynamic'
 import { supabaseServer as supabase } from '@/lib/supabase-server'
 import { DEFAULT_ACCOUNT_ID } from '@/lib/stores'

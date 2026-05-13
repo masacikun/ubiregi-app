@@ -57,6 +57,28 @@ export type DailySales = {
   avg_checkout_value: number
 }
 
+// 月別売上ビュー
+export type MonthlySales = {
+  account_id: number
+  sale_month: string
+  checkout_count: number
+  subtotal: number
+  tax_amount: number
+  total: number
+  discount_amount: number
+  avg_checkout_value: number
+}
+
+// 支払方法別ビュー
+export type PaymentBreakdown = {
+  account_id: number
+  sale_date: string
+  payment_method: string | null
+  payment_type_name: string | null
+  total_amount: number
+  checkout_count: number
+}
+
 // 商品別売上ランキングビュー
 export type ItemSalesRanking = {
   account_id: number

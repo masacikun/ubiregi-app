@@ -1,16 +1,32 @@
 """
 ユビレジ → Supabase 同期スクリプト
-budget-appと同じSupabaseプロジェクトのubiregi_*テーブルに書き込む
 
 使い方:
-  1. pip install requests supabase python-dotenv
-  2. .env.local に以下を追加:
-       UBIREGI_API_TOKEN=your_token
-       UBIREGI_ACCOUNT_ID=your_account_id
-       SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-  3. python sync_ubiregi.py           # 増分同期
-     python sync_ubiregi.py --full    # フル同期（初回）
-     python sync_ubiregi.py --since 2024-06-01 --until 2024-06-30  # 再同期
+  pip install requests supabase python-dotenv
+
+  # 単一店舗（.env.localのデフォルトを使用）
+  python sync_ubiregi.py
+  python sync_ubiregi.py --full
+
+  # 店舗を指定して実行
+  python sync_ubiregi.py --full --token TOKEN --account-id 12345
+
+  # 全店舗を一括同期（.env.localにSTORE_N_TOKEN / STORE_N_ACCOUNT_ID を設定）
+  python sync_ubiregi.py --full --all-stores
+
+.env.local に設定する変数:
+  # デフォルト店舗（後方互換）
+  UBIREGI_API_TOKEN=...
+  UBIREGI_ACCOUNT_ID=...
+
+  # 追加店舗
+  UBIREGI_STORE_2_TOKEN=...
+  UBIREGI_STORE_2_ACCOUNT_ID=...
+  UBIREGI_STORE_3_TOKEN=...
+  UBIREGI_STORE_3_ACCOUNT_ID=...
+
+  SUPABASE_SERVICE_ROLE_KEY=...
+  NEXT_PUBLIC_SUPABASE_URL=...
 """
 
 import os
@@ -22,11 +38,9 @@ from dotenv import load_dotenv
 
 load_dotenv(".env.local")
 
-UBIREGI_TOKEN      = os.environ["UBIREGI_API_TOKEN"]
-UBIREGI_ACCOUNT_ID = os.environ["UBIREGI_ACCOUNT_ID"]
-UBIREGI_BASE_URL   = "https://ubiregi.com/api/3"
-SUPABASE_URL       = os.environ["NEXT_PUBLIC_SUPABASE_URL"]
-SUPABASE_KEY       = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+UBIREGI_BASE_URL = "https://ubiregi.com/api/3"
+SUPABASE_URL     = os.environ["NEXT_PUBLIC_SUPABASE_URL"]
+SUPABASE_KEY     = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 
 import requests
 from supabase import create_client
@@ -34,10 +48,9 @@ from supabase import create_client
 supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-_RETRYABLE = ("ConnectionTerminated", "ConnectError", "RemoteProtocolError", "ReadError", "TimeoutException")
+_RETRYABLE = ("ConnectionTerminated", "ConnectError", "RemoteProtocolError", "ReadError", "TimeoutException", "57014", "statement timeout")
 
 def sb_execute(op, retries=4):
-    """Supabase操作をリトライ付きで実行（接続切断・DNS一時失敗対策）"""
     global supabase_client
     for attempt in range(retries):
         try:
@@ -50,41 +63,36 @@ def sb_execute(op, retries=4):
             else:
                 raise
 
-def _new_session():
+
+def make_session(token):
     s = requests.Session()
     s.headers.update({
-        "X-Ubiregi-Auth-Token": UBIREGI_TOKEN,
+        "X-Ubiregi-Auth-Token": token,
         "Accept": "application/json",
     })
     return s
 
-session = _new_session()
 
-
-# ── API ──────────────────────────────────────────────────────
-
-def api_get(path, params=None, retries=4):
-    global session
-    time.sleep(0.5)  # レート制御
+def api_get(session, path, params=None, retries=4):
+    time.sleep(0.5)
     for attempt in range(retries):
         try:
             resp = session.get(f"{UBIREGI_BASE_URL}{path}", params=params, timeout=30)
             resp.raise_for_status()
             return resp.json()
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             if attempt < retries - 1:
                 time.sleep(3 ** attempt)
-                session = _new_session()
             else:
                 raise
 
 
-def paginate(path, key, params=None):
+def paginate(session, path, key, params=None):
     params = dict(params or {})
     params["count"] = 100
     current_path = path
     while True:
-        data = api_get(current_path, params)
+        data = api_get(session, current_path, params)
         yield from data.get(key, [])
         next_url = data.get("next-url")
         if not next_url:
@@ -92,8 +100,6 @@ def paginate(path, key, params=None):
         current_path = next_url.replace(UBIREGI_BASE_URL, "")
         params = {}
 
-
-# ── 変換 ─────────────────────────────────────────────────────
 
 def parse_dt(v):
     if not v:
@@ -117,20 +123,15 @@ def to_f(v):
         return None
 
 
-# ── 同期処理 ──────────────────────────────────────────────────
+def sync_masters(session, acc_id):
+    print(f"  マスタデータを同期中 (account_id={acc_id})...")
 
-def sync_masters():
-    print("マスタデータを同期中...")
-    acc_id = int(UBIREGI_ACCOUNT_ID)
-
-    # アカウント情報取得（menu_id、cashiers、payment_types を含む）
-    acc_data = api_get(f"/accounts/{acc_id}")
-    account = acc_data["account"]
+    acc_data = api_get(session, f"/accounts/{acc_id}")
+    account  = acc_data["account"]
     menu_ids = account.get("menus", [])
-    menu_id = menu_ids[0] if menu_ids else None
+    menu_id  = menu_ids[0] if menu_ids else None
 
-    # カテゴリ（/menus/{menu_id}/categories）
-    cats = list(paginate(f"/menus/{menu_id}/categories", "categories")) if menu_id else []
+    cats = list(paginate(session, f"/menus/{menu_id}/categories", "categories")) if menu_id else []
     if cats:
         rows = [{
             "id":         int(c["id"]),
@@ -141,10 +142,9 @@ def sync_masters():
             "raw_data":   c,
         } for c in cats]
         supabase_client.table("ubiregi_categories").upsert(rows, on_conflict="id").execute()
-        print(f"  カテゴリ: {len(rows)} 件")
+        print(f"    カテゴリ: {len(rows)} 件")
 
-    # 商品（/menus/{menu_id}/items）
-    items = list(paginate(f"/menus/{menu_id}/items", "items")) if menu_id else []
+    items = list(paginate(session, f"/menus/{menu_id}/items", "items")) if menu_id else []
     if items:
         rows = [{
             "id":          int(m["id"]),
@@ -160,9 +160,8 @@ def sync_masters():
             "raw_data":    m,
         } for m in items]
         supabase_client.table("ubiregi_menu_items").upsert(rows, on_conflict="id").execute()
-        print(f"  商品: {len(rows)} 件")
+        print(f"    商品: {len(rows)} 件")
 
-    # スタッフ（アカウントに埋め込み済み）
     cashiers = account.get("cashiers", [])
     if cashiers:
         rows = [{
@@ -173,9 +172,8 @@ def sync_masters():
             "raw_data":   c,
         } for c in cashiers]
         supabase_client.table("ubiregi_cashiers").upsert(rows, on_conflict="id").execute()
-        print(f"  スタッフ: {len(cashiers)} 件")
+        print(f"    スタッフ: {len(cashiers)} 件")
 
-    # 支払方法（アカウントに埋め込み済み）
     payment_types = account.get("payment_types", [])
     if payment_types:
         rows = [{
@@ -187,9 +185,8 @@ def sync_masters():
             "raw_data":       p,
         } for p in payment_types]
         supabase_client.table("ubiregi_payment_types").upsert(rows, on_conflict="id").execute()
-        print(f"  支払方法: {len(rows)} 件")
+        print(f"    支払方法: {len(rows)} 件")
 
-    # checkout用の名前ルックアップマップを返す
     item_map = {
         int(m["id"]): {
             "name":          m.get("name", ""),
@@ -205,25 +202,23 @@ def sync_masters():
     return item_map, payment_map
 
 
-def sync_checkouts(since=None, until=None, item_map=None, payment_map=None):
-    acc_id = int(UBIREGI_ACCOUNT_ID)
-    item_map = item_map or {}
+def sync_checkouts(session, acc_id, since=None, until=None, item_map=None, payment_map=None):
+    item_map    = item_map    or {}
     payment_map = payment_map or {}
-    params = {}
+    params      = {}
     if since:
         params["since"] = since.strftime("%Y-%m-%dT%H:%M:%SZ")
     if until:
         params["until"] = until.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     total = 0
-    for raw in paginate(f"/accounts/{acc_id}/checkouts", "checkouts", params):
+    for raw in paginate(session, f"/accounts/{acc_id}/checkouts", "checkouts", params):
         co_id = int(raw["id"])
 
-        taxes = raw.get("taxes", [])
-        total_tax = sum(to_f(t.get("tax", 0)) or 0 for t in taxes)
+        taxes      = raw.get("taxes", [])
+        total_tax  = sum(to_f(t.get("tax", 0)) or 0 for t in taxes)
         total_price = to_f(raw.get("price", 0)) or 0
 
-        # 会計ヘッダ
         checkout_row = {
             "id":              co_id,
             "account_id":      acc_id,
@@ -240,7 +235,6 @@ def sync_checkouts(since=None, until=None, item_map=None, payment_map=None):
         }
         sb_execute(lambda row=checkout_row: supabase_client.table("ubiregi_checkouts").upsert(row, on_conflict="id").execute())
 
-        # 明細（DELETE → INSERT）
         sb_execute(lambda: supabase_client.table("ubiregi_checkout_items").delete().eq("checkout_id", co_id).execute())
         line_items = raw.get("items", [])
         if line_items:
@@ -270,18 +264,16 @@ def sync_checkouts(since=None, until=None, item_map=None, payment_map=None):
                     "discount_amount": to_f(item.get("discount_sales", 0)),
                     "raw_data":        item,
                 })
-            # 同一checkout内のitem ID重複を除去
             seen_ids = set()
             deduped = [r for r in item_rows if r["id"] not in seen_ids and not seen_ids.add(r["id"])]
             sb_execute(lambda rows=deduped: supabase_client.table("ubiregi_checkout_items").upsert(rows, on_conflict="id").execute())
 
-        # 支払い
         sb_execute(lambda: supabase_client.table("ubiregi_checkout_payments").delete().eq("checkout_id", co_id).execute())
         payments = raw.get("payments", [])
         if payments:
             pay_rows = []
             for p in payments:
-                pt_id = int(p["payment_type_id"]) if p.get("payment_type_id") else None
+                pt_id   = int(p["payment_type_id"]) if p.get("payment_type_id") else None
                 pt_info = payment_map.get(pt_id, {}) if pt_id else {}
                 pay_rows.append({
                     "checkout_id":       co_id,
@@ -296,31 +288,41 @@ def sync_checkouts(since=None, until=None, item_map=None, payment_map=None):
 
         total += 1
         if total % 50 == 0:
-            print(f"  {total} 件処理済み...")
+            print(f"    {total} 件処理済み...")
 
-    print(f"  会計データ: {total} 件完了")
     return total
 
 
-def get_last_sync():
-    """最終成功同期日時を取得"""
+def parse_db_dt(ts):
+    """DB返却タイムスタンプ用（Python 3.9 fromisoformat 制限回避: Z・5桁μs・+HH:MM）"""
+    import re
+    if not ts:
+        return None
+    ts = re.sub(r'\.(\d+)', lambda m: '.' + (m.group(1) + '000000')[:6], ts)
+    ts = ts.rstrip('Z')
+    ts = re.sub(r'[+-]\d{2}:\d{2}$', '', ts)
+    return datetime.fromisoformat(ts).replace(tzinfo=timezone.utc)
+
+
+def get_last_sync(acc_id):
     res = supabase_client.table("ubiregi_sync_logs") \
         .select("finished_at") \
         .eq("target", "checkouts") \
+        .eq("account_id", acc_id) \
         .eq("status", "success") \
         .order("finished_at", desc=True) \
         .limit(1) \
         .execute()
     if res.data:
-        return datetime.fromisoformat(res.data[0]["finished_at"])
+        return parse_db_dt(res.data[0]["finished_at"])
     return None
 
 
-def log_sync(sync_type, target, status, fetched=0, upserted=0, error=None, since=None, until=None):
+def log_sync(sync_type, target, acc_id, status, fetched=0, upserted=0, error=None, since=None, until=None):
     supabase_client.table("ubiregi_sync_logs").insert({
         "sync_type":        sync_type,
         "target":           target,
-        "account_id":       int(UBIREGI_ACCOUNT_ID),
+        "account_id":       acc_id,
         "status":           status,
         "records_fetched":  fetched,
         "records_upserted": upserted,
@@ -331,50 +333,110 @@ def log_sync(sync_type, target, status, fetched=0, upserted=0, error=None, since
     }).execute()
 
 
+def get_store_configs():
+    """全店舗の設定を収集（デフォルト + STORE_N）"""
+    stores = []
+    default_token = os.environ.get("UBIREGI_API_TOKEN")
+    default_acc   = os.environ.get("UBIREGI_ACCOUNT_ID")
+    if default_token and default_acc:
+        stores.append({"token": default_token, "account_id": int(default_acc)})
+
+    for n in range(2, 20):
+        token  = os.environ.get(f"UBIREGI_STORE_{n}_TOKEN")
+        acc_id = os.environ.get(f"UBIREGI_STORE_{n}_ACCOUNT_ID")
+        if token and acc_id:
+            stores.append({"token": token, "account_id": int(acc_id)})
+
+    return stores
+
+
+def sync_store(token, acc_id, sync_type, since, until):
+    print(f"\n{'='*50}")
+    print(f"店舗同期: account_id={acc_id}")
+    print(f"{'='*50}")
+    session = make_session(token)
+
+    item_map, payment_map = sync_masters(session, acc_id)
+
+    print(f"  会計データ同期中 (account_id={acc_id})...")
+    try:
+        n = sync_checkouts(
+            session, acc_id,
+            since=since, until=until,
+            item_map=item_map, payment_map=payment_map
+        )
+        log_sync(sync_type, "checkouts", acc_id, "success", fetched=n, upserted=n, since=since, until=until)
+        print(f"  ✅ 完了: {n} 件")
+        return n
+    except Exception as e:
+        log_sync(sync_type, "checkouts", acc_id, "error", error=e, since=since, until=until)
+        print(f"  ❌ エラー: {e}")
+        return 0
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--full",  action="store_true", help="全期間フル同期")
-    parser.add_argument("--since", help="開始日 YYYY-MM-DD")
-    parser.add_argument("--until", help="終了日 YYYY-MM-DD")
+    parser.add_argument("--full",       action="store_true", help="全期間フル同期")
+    parser.add_argument("--all-stores", action="store_true", help="全店舗を一括同期")
+    parser.add_argument("--token",      help="APIトークン（指定時は--account-idも必須）")
+    parser.add_argument("--account-id", type=int, dest="account_id", help="account_id")
+    parser.add_argument("--since",      help="開始日 YYYY-MM-DD")
+    parser.add_argument("--until",      help="終了日 YYYY-MM-DD")
     args = parser.parse_args()
 
     print("=== ユビレジ → Supabase 同期 ===\n")
 
-    # マスタは毎回同期
-    item_map, payment_map = sync_masters()
-
-    # 会計データの期間を決定
+    # 期間を決定
     since, until = None, None
-
     if args.since:
         import pytz
-        JST = pytz.timezone("Asia/Tokyo")
+        JST   = pytz.timezone("Asia/Tokyo")
         since = JST.localize(datetime.strptime(args.since, "%Y-%m-%d")).astimezone(timezone.utc)
         until_date = args.until or args.since
         until = JST.localize(datetime.strptime(until_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)).astimezone(timezone.utc)
         sync_type = "manual"
-        print(f"\n会計データ再同期: {args.since} ～ {until_date}")
+        print(f"期間: {args.since} ～ {until_date}")
     elif args.full:
         sync_type = "full"
-        print("\n会計データ: フル同期（全期間）")
+        print("モード: フル同期（全期間）")
     else:
         sync_type = "incremental"
-        last = get_last_sync()
-        if last:
-            since = last - timedelta(minutes=10)
-            print(f"\n会計データ: 増分同期（{since.strftime('%Y-%m-%d %H:%M')} 以降）")
-        else:
-            print("\n前回同期なし → フル同期にフォールバック")
-            sync_type = "full"
 
-    try:
-        n = sync_checkouts(since=since, until=until, item_map=item_map, payment_map=payment_map)
-        log_sync(sync_type, "checkouts", "success", fetched=n, upserted=n, since=since, until=until)
-        print(f"\n✅ 完了: {n} 件")
-    except Exception as e:
-        log_sync(sync_type, "checkouts", "error", error=e, since=since, until=until)
-        print(f"\n❌ エラー: {e}")
-        sys.exit(1)
+    # 対象店舗を決定
+    if args.token and args.account_id:
+        stores = [{"token": args.token, "account_id": args.account_id}]
+    elif args.all_stores:
+        stores = get_store_configs()
+        if not stores:
+            print("❌ .env.local に店舗設定がありません")
+            sys.exit(1)
+        print(f"対象店舗: {len(stores)} 店舗")
+    else:
+        token  = os.environ.get("UBIREGI_API_TOKEN")
+        acc_id = os.environ.get("UBIREGI_ACCOUNT_ID")
+        if not token or not acc_id:
+            print("❌ UBIREGI_API_TOKEN / UBIREGI_ACCOUNT_ID が設定されていません")
+            sys.exit(1)
+        stores = [{"token": token, "account_id": int(acc_id)}]
+
+    total_all = 0
+    for store in stores:
+        token  = store["token"]
+        acc_id = store["account_id"]
+
+        if sync_type == "incremental":
+            last = get_last_sync(acc_id)
+            if last:
+                since = last - timedelta(minutes=10)
+                print(f"\naccount_id={acc_id}: 増分同期（{since.strftime('%Y-%m-%d %H:%M')} 以降）")
+            else:
+                print(f"\naccount_id={acc_id}: 前回同期なし → フル同期")
+                sync_type = "full"
+
+        total_all += sync_store(token, acc_id, sync_type, since, until)
+
+    print(f"\n{'='*50}")
+    print(f"全店舗完了: 合計 {total_all} 件")
 
 
 if __name__ == "__main__":

@@ -5,12 +5,10 @@ import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { STORES, ALL_LABEL, DEFAULT_ACCOUNT_ID } from '@/lib/stores'
 
-const BUDGET_APP_URL = process.env.NEXT_PUBLIC_BUDGET_APP_URL || 'http://localhost:3000'
-
 const EXTERNAL_LINKS = [
-  { href: 'https://naisen-app-drab.vercel.app/',            label: '電話履歴', color: 'text-sky-300     border-sky-500     hover:bg-sky-500'     },
-  { href: 'https://budget-app-three-sandy.vercel.app/',     label: '予実管理', color: 'text-violet-300  border-violet-500  hover:bg-violet-500'  },
-  { href: 'https://mf-accounting-sync.vercel.app/dashboard',label: 'MF会計',  color: 'text-emerald-300 border-emerald-500 hover:bg-emerald-500' },
+  { href: '/n',           label: '電話履歴' },
+  { href: '/',            label: '予実管理' },
+  { href: '/m/dashboard', label: 'MF会計'  },
 ]
 
 const links = [
@@ -20,14 +18,12 @@ const links = [
 ]
 
 export default function NavBar() {
-  const pathname   = usePathname()
+  const pathname     = usePathname()
   const searchParams = useSearchParams()
-  const router     = useRouter()
+  const router       = useRouter()
   const [navigating, setNavigating] = useState(false)
 
-  useEffect(() => {
-    setNavigating(false)
-  }, [pathname, searchParams])
+  useEffect(() => { setNavigating(false) }, [pathname, searchParams])
 
   const currentA = searchParams.get('a') ?? String(DEFAULT_ACCOUNT_ID)
   const currentY = searchParams.get('y') ?? ''
@@ -56,7 +52,9 @@ export default function NavBar() {
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-400 animate-pulse z-50" />
       )}
       <div className="w-full px-4 flex items-center justify-between h-14">
-        <span className="font-bold text-base tracking-wide text-white">ユビレジ 売上分析</span>
+        <Link href={makeHref('/')} className="font-bold text-base tracking-wide text-white hover:text-slate-200 transition-colors">
+          ユビレジ分析
+        </Link>
         <div className="flex items-center gap-3">
           {!isDashboard && (
             <select
@@ -76,21 +74,21 @@ export default function NavBar() {
                 key={link.href}
                 href={makeHref(link.href)}
                 onClick={() => pathname !== link.href && setNavigating(true)}
-                className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
+                className={`px-3 py-2 rounded text-sm font-semibold transition-colors ${
                   pathname === link.href
                     ? 'bg-blue-600 text-white'
-                    : 'text-gray-200 hover:bg-slate-700 hover:text-white'
+                    : 'text-slate-200 hover:bg-slate-700 hover:text-white'
                 }`}
               >
                 {link.label}
               </Link>
             ))}
-            <div className="ml-3 flex items-center gap-1.5">
+            <div className="ml-2 flex items-center gap-1.5 border-l border-slate-600 pl-3">
               {EXTERNAL_LINKS.map(link => (
                 <a
                   key={link.href}
                   href={link.href}
-                  className={`px-3 py-1.5 rounded text-xs font-semibold border hover:text-white transition-colors ${link.color}`}
+                  className="px-3 py-1.5 rounded text-xs font-semibold text-sky-300 border border-sky-700 hover:bg-sky-700 hover:text-white transition-colors"
                 >
                   {link.label}
                 </a>
