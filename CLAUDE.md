@@ -11,6 +11,10 @@ VPS: `/var/www/ubiregi-app` (PM2: `ubiregi-app`, port 3001, basePath: `/u`)
 2. **VPS の SYSTEM.md を更新する** — `ssh smileadmin@smile-mgmt.xvps.jp` で `/var/www/SYSTEM.md` を編集し、変更内容を更新履歴に追記する
 3. **GitHub に push する** — main ブランチに push して GitHub Actions で VPS へデプロイする
 
+## 作業ルール
+- 作業完了後は必ず git add . && git commit && git push を実行すること
+- コミットメッセージは変更内容を日本語で簡潔に書くこと
+
 ## 技術スタック
 
 - Next.js 16.2.6 (App Router, basePath: `/u`)
