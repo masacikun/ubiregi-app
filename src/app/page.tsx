@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { supabaseServer as supabase } from '@/lib/supabase-server'
 import { DEFAULT_ACCOUNT_ID } from '@/lib/stores'
 import DashboardClient from './DashboardClient'
