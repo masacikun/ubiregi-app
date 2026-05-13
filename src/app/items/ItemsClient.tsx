@@ -286,7 +286,7 @@ export default function ItemsClient({
             {storeOptions.map(s => (
               <button key={s.id} onClick={() => navigate(selectedFrom, selectedTo, s.id)} disabled={isPending}
                 className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  currentA === s.id ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-slate-600 hover:bg-slate-200'
+                  currentA === s.id ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200'
                 }`}>
                 {s.label}
               </button>
@@ -311,7 +311,7 @@ export default function ItemsClient({
                 selectedFrom === q.from && selectedTo === q.to
                   ? 'bg-blue-600 text-white border-blue-600'
                   : !q.from && !selectedFrom ? 'bg-blue-600 text-white border-blue-600'
-                  : 'text-slate-600 border-slate-300 hover:border-blue-400 hover:text-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 border-slate-300 hover:border-blue-400 hover:text-blue-600'
               }`}>
               {q.label}
             </button>
@@ -339,7 +339,7 @@ export default function ItemsClient({
             <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" checked={state} onChange={e => set(e.target.checked)}
                 className="w-4 h-4 accent-blue-600" />
-              <span className="text-xs text-slate-600">{label}</span>
+              <span className="text-xs text-gray-600 dark:text-gray-400">{label}</span>
             </label>
           ))}
         </div>
@@ -366,7 +366,7 @@ export default function ItemsClient({
       {/* カテゴリ別売上構成（ドーナツ + バー） */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <h2 className="text-sm font-bold text-slate-600">カテゴリ別売上構成</h2>
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400">カテゴリ別売上構成</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setSelectedCats(null)}
               className={`text-xs px-3 py-1 rounded-full border transition-colors ${selectedCats === null ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-500 dark:text-gray-400 border-slate-300 hover:border-blue-400'}`}>
@@ -402,7 +402,7 @@ export default function ItemsClient({
                 <DonutChart data={donutData} size={140} />
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                   {donutData.slice(0, 8).map((d, i) => (
-                    <div key={i} className="flex items-center gap-1.5 text-xs text-slate-600">
+                    <div key={i} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
                       <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: d.color }} />
                       <span className="truncate max-w-20">{d.label}</span>
                     </div>
@@ -414,7 +414,7 @@ export default function ItemsClient({
                   const pct = totalRevenue > 0 ? (c.amount / totalRevenue) * 100 : 0
                   return (
                     <div key={c.name} className="flex items-center gap-3 group">
-                      <span className="text-sm text-slate-600 w-32 shrink-0 truncate cursor-pointer hover:text-blue-600 transition-colors"
+                      <span className="text-sm text-gray-600 dark:text-gray-400 w-32 shrink-0 truncate cursor-pointer hover:text-blue-600 transition-colors"
                         onClick={() => toggleCat(c.name)}>
                         {c.name}
                       </span>
@@ -437,7 +437,7 @@ export default function ItemsClient({
       {/* 商品ランキング + ABC分析 */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-          <h2 className="text-sm font-bold text-slate-600">
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400">
             商品ランキング（売上貢献度）
             <span className="ml-2 text-xs font-normal text-slate-400">
               {searchFiltered.length < ranking.length
@@ -448,17 +448,17 @@ export default function ItemsClient({
           <div className="flex gap-2 flex-wrap items-center">
             <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
               <button onClick={() => setSort('revenue')}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${sort==='revenue' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${sort==='revenue' ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-slate-50'}`}>
                 売上金額
               </button>
               <button onClick={() => setSort('quantity')}
-                className={`px-3 py-1.5 text-xs font-medium border-l border-gray-200 dark:border-gray-700 transition-colors ${sort==='quantity' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                className={`px-3 py-1.5 text-xs font-medium border-l border-gray-200 dark:border-gray-700 transition-colors ${sort==='quantity' ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-slate-50'}`}>
                 販売数量
               </button>
             </div>
             <input type="text" placeholder="商品名で絞り込み" value={search}
               onChange={e => setSearch(e.target.value)}
-              className="text-xs border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-slate-600 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+              className="text-xs border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-gray-600 dark:text-gray-400 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400" />
             {search && (
               <button onClick={() => setSearch('')} className="text-xs text-blue-500 hover:text-blue-700">リセット</button>
             )}
@@ -531,7 +531,7 @@ export default function ItemsClient({
 
       {/* 価格帯別売上分析 */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">価格帯別売上分析</h2>
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">価格帯別売上分析</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {priceRangeData.map((band, i) => {
             const pct = totalRevenue > 0 ? (band.revenue / totalRevenue) * 100 : 0
@@ -555,7 +555,7 @@ export default function ItemsClient({
 
       {/* 原価率（データなし） */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-        <h2 className="text-sm font-bold text-slate-600 mb-3">原価率ランキング</h2>
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-3">原価率ランキング</h2>
         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">原価データが未登録です</p>
           <p className="text-xs text-slate-400 mt-1">ユビレジ管理画面で各商品の原価を設定すると、ここに原価率ランキングが表示されます</p>
@@ -565,7 +565,7 @@ export default function ItemsClient({
       {/* よく一緒に注文される商品 TOP10 */}
       {filteredPairing.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-sm font-bold text-slate-600 mb-4">
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">
             よく一緒に注文される商品
             <span className="ml-2 text-xs font-normal text-slate-400">（セット提案用 TOP10）</span>
           </h2>
@@ -586,7 +586,7 @@ export default function ItemsClient({
       {/* 注文頻度ランキング（リピート率） */}
       {filteredRepeatRate.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-sm font-bold text-slate-600 mb-4">
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">
             注文頻度ランキング
             <span className="ml-2 text-xs font-normal text-slate-400">（会計回数ベース）</span>
           </h2>
@@ -631,7 +631,7 @@ export default function ItemsClient({
       {/* 時間帯×カテゴリ クロス集計 */}
       {hodCategoryData.some(h => h.categories.length > 0) && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-sm font-bold text-slate-600 mb-3">
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-3">
             時間帯×カテゴリ クロス集計
             <span className="ml-2 text-xs font-normal text-slate-400">（17〜翌1時）</span>
           </h2>
@@ -644,7 +644,7 @@ export default function ItemsClient({
                   className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                     activeHodCatHour === h
                       ? 'bg-emerald-500 text-white border-emerald-500'
-                      : hasData > 0 ? 'text-slate-600 border-slate-300 hover:border-emerald-400' : 'text-slate-300 border-slate-200'
+                      : hasData > 0 ? 'text-gray-600 dark:text-gray-400 border-slate-300 hover:border-emerald-400' : 'text-slate-300 border-slate-200'
                   }`}>
                   {h === 0 ? '0時' : h === 1 ? '1時' : `${h}時`}
                 </button>
@@ -662,7 +662,7 @@ export default function ItemsClient({
                   const pct = (cat.total / catMax) * 100
                   return (
                     <div key={i} className="flex items-center gap-3">
-                      <span className="text-xs text-slate-600 w-32 shrink-0 truncate">{cat.name}</span>
+                      <span className="text-xs text-gray-600 dark:text-gray-400 w-32 shrink-0 truncate">{cat.name}</span>
                       <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-3 overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: CAT_COLORS[i] ?? '#94a3b8' }} />
                       </div>
@@ -680,7 +680,7 @@ export default function ItemsClient({
       {hasTimeData && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-            <h2 className="text-sm font-bold text-slate-600 mb-3">
+            <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-3">
               時間帯別人気商品
               <span className="ml-1 text-xs font-normal text-slate-400">（17〜翌1時）</span>
             </h2>
@@ -692,7 +692,7 @@ export default function ItemsClient({
                     className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                       (activeHod ?? 21) === h
                         ? 'bg-amber-500 text-white border-amber-500'
-                        : hasData > 0 ? 'text-slate-600 border-slate-300 hover:border-amber-400' : 'text-slate-300 border-slate-200'
+                        : hasData > 0 ? 'text-gray-600 dark:text-gray-400 border-slate-300 hover:border-amber-400' : 'text-slate-300 border-slate-200'
                     }`}>
                     {h === 0 ? '0時' : h === 1 ? '1時' : `${h}時`}
                   </button>
@@ -715,7 +715,7 @@ export default function ItemsClient({
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-            <h2 className="text-sm font-bold text-slate-600 mb-3">曜日別人気商品 TOP5</h2>
+            <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-3">曜日別人気商品 TOP5</h2>
             <div className="flex gap-1 flex-wrap mb-3">
               {filteredDowTopItems.map(d => (
                 <button key={d.dow} onClick={() => setActiveDow(d.dow)}
@@ -724,7 +724,7 @@ export default function ItemsClient({
                       ? 'bg-blue-600 text-white border-blue-600'
                       : d.dow === 0 ? 'text-red-400 border-slate-300 hover:border-red-400'
                       : d.dow === 6 ? 'text-blue-400 border-slate-300 hover:border-blue-400'
-                      : 'text-slate-600 border-slate-300 hover:border-blue-400'
+                      : 'text-gray-600 dark:text-gray-400 border-slate-300 hover:border-blue-400'
                   }`}>
                   {d.label}
                 </button>
@@ -750,7 +750,7 @@ export default function ItemsClient({
       {/* 月別カテゴリ構成比の推移 */}
       {monthlyCategoryData.length > 1 && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-sm font-bold text-slate-600 mb-4">月別カテゴリ構成比の推移</h2>
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">月別カテゴリ構成比の推移</h2>
           <div className="overflow-x-auto">
             <table className="text-xs border-collapse min-w-full">
               <thead>
@@ -766,7 +766,7 @@ export default function ItemsClient({
                   const rowTotal = row.categories.reduce((s, c) => s + c.total, 0)
                   return (
                     <tr key={row.month} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
-                      <td className="py-2 pr-3 text-slate-600 font-medium">{row.month}</td>
+                      <td className="py-2 pr-3 text-gray-600 dark:text-gray-400 font-medium">{row.month}</td>
                       {allCatsInMonthly.map((cat, ci) => {
                         const c = row.categories.find(c => c.name === cat)
                         const pct = rowTotal > 0 && c ? ((c.total / rowTotal) * 100) : 0
@@ -815,7 +815,7 @@ export default function ItemsClient({
       {/* 季節別売上 */}
       {seasonalData.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-sm font-bold text-slate-600 mb-4">季節別売上</h2>
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">季節別売上</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {seasonalData.map(s => (
               <div key={s.key} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
@@ -828,7 +828,7 @@ export default function ItemsClient({
                   {s.items.map((item, i) => (
                     <div key={i} className="flex items-center gap-1.5">
                       <span className="text-xs font-bold text-slate-400 tabular-nums w-3">{i + 1}</span>
-                      <span className="text-xs text-slate-600 truncate flex-1">{item.name}</span>
+                      <span className="text-xs text-gray-600 dark:text-gray-400 truncate flex-1">{item.name}</span>
                       <span className="text-xs text-slate-400 tabular-nums shrink-0">{yen(item.rev)}</span>
                     </div>
                   ))}

@@ -154,7 +154,7 @@ export default function DashboardClient({
             {storeOptions.map(s => (
               <button key={s.id} onClick={() => nav({ a: s.id })} disabled={isPending}
                 className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                  currentA === s.id ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'bg-gray-100 dark:bg-gray-800 text-slate-600 hover:bg-slate-200'
+                  currentA === s.id ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200'
                 }`}>
                 {s.label}
               </button>
@@ -199,7 +199,7 @@ export default function DashboardClient({
       {/* 直近30日 日別売上（昨対比バッジ付き） */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <h2 className="text-sm font-bold text-slate-600 flex items-center gap-2">
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 flex items-center gap-2">
             直近30日 日別売上
             {yoyLast30 != null && (
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
@@ -234,7 +234,7 @@ export default function DashboardClient({
                 </div>
                 <div style={{ height: '20px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', width: '100%' }}>
                   {d.total > 0 && (
-                    <span className="text-slate-600 tabular-nums leading-none" style={{ fontSize: '7px' }}>
+                    <span className="text-gray-600 dark:text-gray-400 tabular-nums leading-none" style={{ fontSize: '7px' }}>
                       {d.total >= 10000 ? `${Math.round(d.total / 10000)}万` : `${Math.round(d.total / 1000)}千`}
                     </span>
                   )}
@@ -254,7 +254,7 @@ export default function DashboardClient({
 
       {/* 月別売上推移 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">{selectedYear}年 月別売上推移</h2>
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">{selectedYear}年 月別売上推移</h2>
         {yearMonthly.length === 0 ? (
           <p className="text-slate-400 text-sm text-center py-8">データがありません</p>
         ) : (
@@ -308,7 +308,7 @@ export default function DashboardClient({
                     ? Math.round(Number(row.total) / Number(row.checkout_count)) : 0
                   return (
                     <tr key={String(row.sale_month)} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
-                      <td className="py-2 text-slate-600 text-sm">
+                      <td className="py-2 text-gray-600 dark:text-gray-400 text-sm">
                         {new Date(String(row.sale_month) + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
                       </td>
                       <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{yen(Number(row.total))}</td>
@@ -332,14 +332,14 @@ export default function DashboardClient({
       {/* 売上ランキング（カテゴリタブ付き） */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h2 className="text-sm font-bold text-slate-600">
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400">
             売上ランキング TOP10 <span className="ml-1 text-xs font-normal text-slate-400">（直近データ）</span>
           </h2>
           <div className="flex gap-1.5 flex-wrap">
             {CATEGORY_TABS.map(tab => (
               <button key={tab.key} onClick={() => setTopTab(tab.key)}
                 className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
-                  topTab === tab.key ? 'bg-blue-600 text-white border-blue-600' : 'text-slate-600 border-slate-300 hover:border-blue-400 hover:text-blue-600'
+                  topTab === tab.key ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-600 dark:text-gray-400 border-slate-300 hover:border-blue-400 hover:text-blue-600'
                 }`}>
                 {tab.label}
               </button>
@@ -377,7 +377,7 @@ export default function DashboardClient({
       {/* 曜日別 + 時間帯別（17〜25時） */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h2 className="text-sm font-bold text-slate-600 mb-4">曜日別売上 <span className="text-xs font-normal text-slate-400">（直近30日）</span></h2>
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">曜日別売上 <span className="text-xs font-normal text-slate-400">（直近30日）</span></h2>
           {dowData.every(d => d.total === 0) ? (
             <p className="text-slate-400 text-sm text-center py-8">データがありません</p>
           ) : (
@@ -397,7 +397,7 @@ export default function DashboardClient({
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h2 className="text-sm font-bold text-slate-600 mb-4">
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">
             時間帯別売上
             <span className="text-xs font-normal text-slate-400 ml-1">17〜翌1時（直近30日）</span>
           </h2>
@@ -425,7 +425,7 @@ export default function DashboardClient({
 
       {/* 支払方法別 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">支払方法別</h2>
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">支払方法別</h2>
         {paymentData.length === 0 ? (
           <p className="text-slate-400 text-sm text-center py-8">データがありません</p>
         ) : (
@@ -434,7 +434,7 @@ export default function DashboardClient({
               const pct = totalPayment > 0 ? (p.amount / totalPayment) * 100 : 0
               return (
                 <div key={p.name} className="flex items-center gap-3 group">
-                  <span className="text-xs text-slate-600 w-32 shrink-0 truncate">{p.name}</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400 w-32 shrink-0 truncate">{p.name}</span>
                   <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-3 overflow-hidden">
                     <div className="h-full bg-emerald-400 group-hover:bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                   </div>

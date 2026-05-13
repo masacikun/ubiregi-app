@@ -355,7 +355,7 @@ export default function SalesClient({
             {storeOptions.map(s => (
               <button key={s.id} onClick={() => navigate(selectedFrom, selectedTo, s.id)} disabled={isPending}
                 className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  currentA === s.id ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-slate-600 hover:bg-slate-200'
+                  currentA === s.id ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200'
                 }`}>
                 {s.label}
               </button>
@@ -376,7 +376,7 @@ export default function SalesClient({
               className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
                 selectedFrom === q.from && selectedTo === q.to && !monthFilterActive
                   ? 'bg-blue-600 text-white border-blue-600'
-                  : 'text-slate-600 border-slate-300 hover:border-blue-400 hover:text-blue-600'
+                  : 'text-gray-600 dark:text-gray-400 border-slate-300 hover:border-blue-400 hover:text-blue-600'
               }`}>
               {q.label}
             </button>
@@ -456,7 +456,7 @@ export default function SalesClient({
       {/* メインチャート（日別/週別/月別） */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <h2 className="text-sm font-bold text-slate-600">売上推移</h2>
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400">売上推移</h2>
           <div className="flex gap-1.5 items-center">
             <div className="flex items-center gap-2 text-xs text-slate-400 mr-3">
               <span className="flex items-center gap-1"><span className="w-3 h-2 rounded-sm bg-blue-400 inline-block" />当期</span>
@@ -464,7 +464,7 @@ export default function SalesClient({
             </div>
             {(['day','week','month'] as const).map(v => (
               <button key={v} onClick={() => setView(v)}
-                className={`px-3 py-1 text-xs rounded-full border transition-colors ${view===v ? 'bg-blue-600 text-white border-blue-600' : 'text-slate-600 border-slate-300 hover:border-blue-400'}`}>
+                className={`px-3 py-1 text-xs rounded-full border transition-colors ${view===v ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-600 dark:text-gray-400 border-slate-300 hover:border-blue-400'}`}>
                 {v==='day'?'日別':v==='week'?'週別':'月別'}
               </button>
             ))}
@@ -484,7 +484,7 @@ export default function SalesClient({
                   title={`${d.label}\n当期: ${yen(d.total)}${yoy != null ? ` (${pctStr(yoy)})` : ''}`}>
                   {/* 数値ラベル */}
                   {showValues && (
-                    <span className="text-slate-600 font-semibold tabular-nums leading-none mb-0.5 truncate w-full text-center" style={{ fontSize: '8px' }}>
+                    <span className="text-gray-600 dark:text-gray-400 font-semibold tabular-nums leading-none mb-0.5 truncate w-full text-center" style={{ fontSize: '8px' }}>
                       {abbr(d.total)}
                     </span>
                   )}
@@ -516,7 +516,7 @@ export default function SalesClient({
       {cumulativeData.length > 1 && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-slate-600">累計売上</h2>
+            <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400">累計売上</h2>
             <span className="text-lg font-bold text-blue-600 tabular-nums">{yen(cumulativeData[cumulativeData.length - 1] ?? 0)}</span>
           </div>
           <SparkLine values={cumulativeData} color="#3b82f6" height={56} />
@@ -556,7 +556,7 @@ export default function SalesClient({
 
       {/* 月別詳細テーブル */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">月別詳細</h2>
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">月別詳細</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -579,7 +579,7 @@ export default function SalesClient({
                 const discRate = row.total > 0 ? (row.discount / row.total) * 100 : 0
                 return (
                   <tr key={row.month} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
-                    <td className="py-2 text-slate-600 text-sm">
+                    <td className="py-2 text-gray-600 dark:text-gray-400 text-sm">
                       {new Date(row.month + '-01T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
                     </td>
                     <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{yen(row.total)}</td>
@@ -601,8 +601,8 @@ export default function SalesClient({
                   <td className="py-2 text-gray-700 dark:text-gray-300">合計</td>
                   <td className="py-2 text-right text-slate-800 tabular-nums">{yen(monthlyRows.totals.total)}</td>
                   <td colSpan={2} />
-                  <td className="py-2 text-right text-slate-600 tabular-nums">{monthlyRows.totals.count.toLocaleString()}</td>
-                  <td className="py-2 text-right text-slate-600 tabular-nums">{yen(monthlyRows.totals.count > 0 ? Math.round(monthlyRows.totals.total / monthlyRows.totals.count) : 0)}</td>
+                  <td className="py-2 text-right text-gray-600 dark:text-gray-400 tabular-nums">{monthlyRows.totals.count.toLocaleString()}</td>
+                  <td className="py-2 text-right text-gray-600 dark:text-gray-400 tabular-nums">{yen(monthlyRows.totals.count > 0 ? Math.round(monthlyRows.totals.total / monthlyRows.totals.count) : 0)}</td>
                   <td className="py-2 text-right text-red-500 tabular-nums">{yen(monthlyRows.totals.discount)}</td>
                   <td className="py-2 text-right text-slate-400 tabular-nums hidden md:table-cell">
                     {monthlyRows.totals.total > 0 ? ((monthlyRows.totals.discount / monthlyRows.totals.total) * 100).toFixed(1) : 0}%
@@ -617,7 +617,7 @@ export default function SalesClient({
       {/* 週別テーブル */}
       {weeklyData.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h2 className="text-sm font-bold text-slate-600 mb-4">週別売上テーブル</h2>
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">週別売上テーブル</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -633,7 +633,7 @@ export default function SalesClient({
               <tbody>
                 {weeklyData.map(row => (
                   <tr key={row.week} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
-                    <td className="py-2 text-slate-600 font-medium text-xs">{row.week}</td>
+                    <td className="py-2 text-gray-600 dark:text-gray-400 font-medium text-xs">{row.week}</td>
                     <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{yen(row.total)}</td>
                     <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{row.count.toLocaleString()}</td>
                     <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{yen(row.days > 0 ? Math.round(row.total / row.days) : 0)}</td>
@@ -649,7 +649,7 @@ export default function SalesClient({
 
       {/* 月初・月中・月末パターン */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">月内パターン分析</h2>
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">月内パターン分析</h2>
         <div className="grid grid-cols-3 gap-4">
           {monthPeriodData.map((band, i) => {
             const totalRev = monthPeriodData.reduce((s, b) => s + b.total, 0)
@@ -675,7 +675,7 @@ export default function SalesClient({
       {/* 曜日別 + 時間帯別 17-25 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h2 className="text-sm font-bold text-slate-600 mb-4">曜日別売上</h2>
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">曜日別売上</h2>
           {dowDataFiltered.every(d => d.total === 0) ? (
             <p className="text-slate-400 text-sm text-center py-8">データがありません</p>
           ) : (
@@ -695,7 +695,7 @@ export default function SalesClient({
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h2 className="text-sm font-bold text-slate-600 mb-4">
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">
             時間帯別売上 <span className="text-xs font-normal text-slate-400">（17〜翌1時）</span>
           </h2>
           {filteredHod.every(h => h.total === 0) ? (
@@ -728,7 +728,7 @@ export default function SalesClient({
 
       {/* 曜日別統計テーブル（平均・最高・最低） */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">曜日別売上統計</h2>
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">曜日別売上統計</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -757,7 +757,7 @@ export default function SalesClient({
 
       {/* 週末vs平日 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">週末 vs 平日 比較</h2>
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">週末 vs 平日 比較</h2>
         <div className="grid grid-cols-2 gap-6">
           {[
             { label: '平日（月〜金）', data: weekdayWeekend.weekday, color: 'bg-blue-100 text-blue-700' },
@@ -782,7 +782,7 @@ export default function SalesClient({
       {sortedDays.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-            <h2 className="text-sm font-bold text-slate-600 mb-4">売上上位10日</h2>
+            <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">売上上位10日</h2>
             <div className="space-y-1.5">
               {sortedDays.slice(0, 10).map((d, i) => {
                 const dow = new Date(d.sale_date + 'T00:00:00').getDay()
@@ -790,7 +790,7 @@ export default function SalesClient({
                   <div key={d.sale_date} className="flex items-center gap-2">
                     <span className="text-xs text-slate-400 w-4 tabular-nums">{i+1}</span>
                     <span className={`text-xs font-bold w-4 ${DOW_COLORS_CLS[dow]}`}>{DOW_NAMES[dow]}</span>
-                    <span className="text-xs text-slate-600 w-24">{d.sale_date}</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400 w-24">{d.sale_date}</span>
                     <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
                       <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${(Number(d.total) / Number(sortedDays[0]?.total ?? 1)) * 100}%` }} />
                     </div>
@@ -801,7 +801,7 @@ export default function SalesClient({
             </div>
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-            <h2 className="text-sm font-bold text-slate-600 mb-4">売上下位10日</h2>
+            <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">売上下位10日</h2>
             <div className="space-y-1.5">
               {[...sortedDays].reverse().slice(0, 10).map((d, i) => {
                 const dow = new Date(d.sale_date + 'T00:00:00').getDay()
@@ -809,7 +809,7 @@ export default function SalesClient({
                   <div key={d.sale_date} className="flex items-center gap-2">
                     <span className="text-xs text-slate-400 w-4 tabular-nums">{i+1}</span>
                     <span className={`text-xs font-bold w-4 ${DOW_COLORS_CLS[dow]}`}>{DOW_NAMES[dow]}</span>
-                    <span className="text-xs text-slate-600 w-24">{d.sale_date}</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400 w-24">{d.sale_date}</span>
                     <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
                       <div className="h-full bg-rose-400 rounded-full" style={{ width: `${(Number(d.total) / Number(sortedDays[0]?.total ?? 1)) * 100}%` }} />
                     </div>
@@ -824,7 +824,7 @@ export default function SalesClient({
 
       {/* 曜日×時間帯ヒートマップ */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">
           曜日×時間帯 クロス集計
           <span className="text-xs font-normal text-slate-400 ml-2">（17〜翌1時・期間全体）</span>
         </h2>
@@ -876,7 +876,7 @@ export default function SalesClient({
 
       {/* 時間帯別テーブル (17-25) */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">
           時間帯別売上テーブル <span className="text-xs font-normal text-slate-400">（17〜翌1時・期間全体）</span>
         </h2>
         <div className="overflow-x-auto">
@@ -896,7 +896,7 @@ export default function SalesClient({
                 const pct = totalHod > 0 ? (row.total / totalHod) * 100 : 0
                 return (
                   <tr key={row.hour} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
-                    <td className="py-2 text-slate-600 font-medium text-sm">
+                    <td className="py-2 text-gray-600 dark:text-gray-400 font-medium text-sm">
                       {row.hour === 0 ? '0時（深夜）' : row.hour === 1 ? '1時（深夜）' : `${row.hour}時`}
                     </td>
                     <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{row.total > 0 ? yen(row.total) : '—'}</td>
@@ -921,7 +921,7 @@ export default function SalesClient({
       {/* 月別前年比テーブル */}
       {monthlyYoY.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h2 className="text-sm font-bold text-slate-600 mb-4">前年同月比テーブル</h2>
+          <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">前年同月比テーブル</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -939,7 +939,7 @@ export default function SalesClient({
                   const diff = row.total - row.prevTotal
                   return (
                     <tr key={row.month} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
-                      <td className="py-2 text-slate-600 text-sm">
+                      <td className="py-2 text-gray-600 dark:text-gray-400 text-sm">
                         {new Date(row.month + '-01T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
                       </td>
                       <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{yen(row.total)}</td>
@@ -961,7 +961,7 @@ export default function SalesClient({
 
       {/* 支払方法別 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">支払方法別</h2>
+        <h2 className="text-sm font-bold text-gray-600 dark:text-gray-400 mb-4">支払方法別</h2>
         {paymentData.length === 0 ? (
           <p className="text-slate-400 text-sm text-center py-8">データがありません</p>
         ) : (
@@ -970,7 +970,7 @@ export default function SalesClient({
               const pct = totalPayment > 0 ? (p.amount / totalPayment) * 100 : 0
               return (
                 <div key={p.name} className="flex items-center gap-3 group">
-                  <span className="text-xs text-slate-600 w-28 shrink-0 truncate">{p.name}</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-400 w-28 shrink-0 truncate">{p.name}</span>
                   <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-3.5 overflow-hidden">
                     <div className="h-full bg-emerald-400 group-hover:bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                   </div>
