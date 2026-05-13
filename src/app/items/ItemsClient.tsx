@@ -14,19 +14,22 @@ type RankingItem = {
 }
 
 type Props = {
-  ranking:          RankingItem[]
-  rowsFetched:      number
-  isPeriodFiltered: boolean
-  selectedFrom:     string | null
-  selectedTo:       string | null
-  currentA:         string
-  pairingData:      { item1: string; item2: string; count: number }[]
-  hodTopItems:      { hour: number; items: { name: string; quantity: number }[] }[]
-  dowTopItems:      { dow: number; label: string; items: { name: string; quantity: number }[] }[]
-  seasonalData:     { key: string; label: string; total: number; items: { name: string; rev: number }[] }[]
+  ranking:             RankingItem[]
+  rowsFetched:         number
+  isPeriodFiltered:    boolean
+  selectedFrom:        string | null
+  selectedTo:          string | null
+  currentA:            string
+  pairingData:         { item1: string; item2: string; count: number }[]
+  hodTopItems:         { hour: number; items: { name: string; quantity: number }[] }[]
+  dowTopItems:         { dow: number; label: string; items: { name: string; quantity: number }[] }[]
+  seasonalData:        { key: string; label: string; total: number; checkoutCount: number; items: { name: string; rev: number }[] }[]
+  repeatRateData:      { name: string; checkoutCount: number; totalQuantity: number }[]
+  hodCategoryData:     { hour: number; categories: { name: string; total: number }[] }[]
+  monthlyCategoryData: { month: string; categories: { name: string; total: number }[] }[]
+  newItemData:         { name: string; firstYear: number; firstMonth: number }[]
 }
 
-const DOW_COLORS_CLS = ['text-red-500','text-slate-600','text-slate-600','text-slate-600','text-slate-600','text-slate-600','text-blue-500']
 const HOD_RANGE = [17,18,19,20,21,22,23,0,1]
 const SEASON_COLORS: Record<string, string> = {
   spring: 'bg-pink-100 text-pink-700',
@@ -35,6 +38,8 @@ const SEASON_COLORS: Record<string, string> = {
   winter: 'bg-slate-100 text-slate-600',
 }
 const DONUT_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16','#ec4899','#6366f1']
+const CAT_COLORS   = DONUT_COLORS
+const ABC_COLORS   = { A: 'bg-emerald-100 text-emerald-700', B: 'bg-amber-100 text-amber-700', C: 'bg-slate-100 text-slate-500' }
 
 function yen(n: number) {
   return n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
@@ -50,9 +55,6 @@ function downloadCSV(rows: Record<string, unknown>[], filename: string) {
   URL.revokeObjectURL(url)
 }
 
-const ABC_COLORS = { A: 'bg-emerald-100 text-emerald-700', B: 'bg-amber-100 text-amber-700', C: 'bg-slate-100 text-slate-500' }
-
-// SVGドーナツチャート
 function DonutChart({ data, size = 128 }: { data: { label: string; value: number; color: string }[]; size?: number }) {
   const total = data.reduce((s, d) => s + d.value, 0)
   if (!total) return null
@@ -81,18 +83,26 @@ function DonutChart({ data, size = 128 }: { data: { label: string; value: number
 export default function ItemsClient({
   ranking, rowsFetched, isPeriodFiltered, selectedFrom, selectedTo, currentA,
   pairingData, hodTopItems, dowTopItems, seasonalData,
+  repeatRateData, hodCategoryData, monthlyCategoryData, newItemData,
 }: Props) {
   const router   = useRouter()
   const pathname = usePathname()
   const [isPending, startTransition] = useTransition()
 
-  const [search,      setSearch]      = useState('')
-  const [selCategory, setSelCategory] = useState('all')
-  const [sort,        setSort]        = useState<'revenue' | 'quantity'>('revenue')
-  const [localFrom,   setLocalFrom]   = useState(selectedFrom ?? '')
-  const [localTo,     setLocalTo]     = useState(selectedTo ?? '')
-  const [activeHod,   setActiveHod]   = useState<number | null>(null)
-  const [activeDow,   setActiveDow]   = useState<number | null>(null)
+  const [search,           setSearch]           = useState('')
+  const [sort,             setSort]             = useState<'revenue' | 'quantity'>('revenue')
+  const [localFrom,        setLocalFrom]        = useState(selectedFrom ?? '')
+  const [localTo,          setLocalTo]          = useState(selectedTo ?? '')
+  const [activeHod,        setActiveHod]        = useState<number | null>(null)
+  const [activeDow,        setActiveDow]        = useState<number | null>(null)
+  const [activeHodCat,     setActiveHodCat]     = useState<number | null>(null)
+
+  // 除外フィルタ
+  const [excludeService,   setExcludeService]   = useState(true)
+  const [excludeMizutaki,  setExcludeMizutaki]  = useState(false)
+
+  // カテゴリ複数選択（null = 全選択）
+  const [selectedCats,     setSelectedCats]     = useState<Set<string> | null>(null)
 
   const storeOptions = [
     { id: 'all', label: ALL_LABEL },
@@ -117,68 +127,153 @@ export default function ItemsClient({
     { label: '全期間', from: null, to: null },
   ]
 
-  // カテゴリ集計
+  // 除外フィルタ後のランキング
+  const baseRanking = useMemo(() => ranking.filter(r => {
+    if (excludeService  && /サービス料/.test(r.menu_item_name)) return false
+    if (excludeMizutaki && /水炊き/.test(r.menu_item_name))   return false
+    return true
+  }), [ranking, excludeService, excludeMizutaki])
+
+  // 全カテゴリ一覧（元データから）
+  const allCategories = useMemo(() => {
+    const s = new Set<string>()
+    for (const r of baseRanking) s.add(r.category_name ?? '未分類')
+    return [...s].sort()
+  }, [baseRanking])
+
+  function toggleCat(cat: string) {
+    setSelectedCats(prev => {
+      const base = prev ?? new Set(allCategories)
+      const next = new Set(base)
+      if (next.has(cat)) next.delete(cat); else next.add(cat)
+      return next.size === allCategories.length ? null : next
+    })
+  }
+
+  // カテゴリ集計（除外後）
   const categoryStats = useMemo(() => {
     const map: Record<string, { amount: number; quantity: number }> = {}
-    for (const r of ranking) {
+    for (const r of baseRanking) {
       const cat = r.category_name ?? '未分類'
       if (!map[cat]) map[cat] = { amount: 0, quantity: 0 }
       map[cat].amount   += r.total_revenue
       map[cat].quantity += r.total_quantity
     }
     return Object.entries(map).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.amount - a.amount)
-  }, [ranking])
+  }, [baseRanking])
 
   const totalRevenue = categoryStats.reduce((s, c) => s + c.amount, 0)
   const maxCategory  = Math.max(...categoryStats.map(c => c.amount), 1)
-  const categories   = ['all', ...categoryStats.map(c => c.name)]
 
-  // ドーナツ用データ（上位8 + その他）
   const donutData = useMemo(() => {
-    const top = categoryStats.slice(0, 8)
+    const top   = categoryStats.slice(0, 8)
     const other = categoryStats.slice(8).reduce((s, c) => s + c.amount, 0)
     const slices = top.map((c, i) => ({ label: c.name, value: c.amount, color: DONUT_COLORS[i] ?? '#94a3b8' }))
     if (other > 0) slices.push({ label: 'その他', value: other, color: '#94a3b8' })
     return slices
   }, [categoryStats])
 
-  // フィルタ済みアイテム
-  const filtered = useMemo(() => {
-    const base = ranking.filter(r => {
-      const matchSearch = r.menu_item_name.toLowerCase().includes(search.toLowerCase())
-      const matchCat    = selCategory === 'all' || (r.category_name ?? '未分類') === selCategory
-      return matchSearch && matchCat
-    })
-    return sort === 'revenue'
-      ? base.sort((a, b) => b.total_revenue  - a.total_revenue)
-      : base.sort((a, b) => b.total_quantity - a.total_quantity)
-  }, [ranking, search, selCategory, sort])
+  // フィルタ済みランキング（除外 + カテゴリ）
+  const filteredRanking = useMemo(() => {
+    const base = selectedCats === null
+      ? baseRanking
+      : baseRanking.filter(r => selectedCats.has(r.category_name ?? '未分類'))
+    const sorted = [...base].sort(sort === 'revenue'
+      ? (a, b) => b.total_revenue  - a.total_revenue
+      : (a, b) => b.total_quantity - a.total_quantity)
+    return sorted
+  }, [baseRanking, selectedCats, sort])
+
+  // 除外後の pairing / HOD / DOW フィルタ
+  const filteredPairing = useMemo(() => pairingData.filter(p => {
+    if (excludeService  && (/サービス料/.test(p.item1) || /サービス料/.test(p.item2))) return false
+    if (excludeMizutaki && (/水炊き/.test(p.item1)    || /水炊き/.test(p.item2)))    return false
+    return true
+  }), [pairingData, excludeService, excludeMizutaki])
+
+  const filteredHodTopItems = useMemo(() => hodTopItems.map(h => ({
+    ...h,
+    items: h.items.filter(item =>
+      !(excludeService  && /サービス料/.test(item.name)) &&
+      !(excludeMizutaki && /水炊き/.test(item.name))
+    ),
+  })), [hodTopItems, excludeService, excludeMizutaki])
+
+  const filteredDowTopItems = useMemo(() => dowTopItems.map(d => ({
+    ...d,
+    items: d.items.filter(item =>
+      !(excludeService  && /サービス料/.test(item.name)) &&
+      !(excludeMizutaki && /水炊き/.test(item.name))
+    ),
+  })), [dowTopItems, excludeService, excludeMizutaki])
+
+  const filteredRepeatRate = useMemo(() => repeatRateData.filter(r =>
+    !(excludeService  && /サービス料/.test(r.name)) &&
+    !(excludeMizutaki && /水炊き/.test(r.name))
+  ).slice(0, 20), [repeatRateData, excludeService, excludeMizutaki])
+
+  // 検索絞り込み後
+  const searchFiltered = useMemo(() => {
+    if (!search) return filteredRanking
+    return filteredRanking.filter(r => r.menu_item_name.toLowerCase().includes(search.toLowerCase()))
+  }, [filteredRanking, search])
 
   // ABC分析
   const abcData = useMemo(() => {
     let cumRev = 0
-    return filtered.map(item => {
+    return searchFiltered.map(item => {
       cumRev += item.total_revenue
       const cumPct = totalRevenue > 0 ? (cumRev / totalRevenue) * 100 : 0
       const abc: 'A' | 'B' | 'C' = cumPct <= 80 ? 'A' : cumPct <= 95 ? 'B' : 'C'
       return { ...item, cumPct, abc }
     })
-  }, [filtered, totalRevenue])
+  }, [searchFiltered, totalRevenue])
+
+  // 価格帯別
+  const priceRangeData = useMemo(() => {
+    const bands = [
+      { label: '〜¥1,000',       min: 0,    max: 1000      },
+      { label: '¥1,000〜¥3,000', min: 1000, max: 3000      },
+      { label: '¥3,000〜',        min: 3000, max: Infinity  },
+    ]
+    return bands.map(band => {
+      const items = filteredRanking.filter(r => {
+        const unit = r.total_quantity > 0 ? r.total_revenue / r.total_quantity : 0
+        return unit >= band.min && unit < band.max
+      })
+      return {
+        label:   band.label,
+        count:   items.length,
+        revenue: items.reduce((s, r) => s + r.total_revenue, 0),
+        quantity: items.reduce((s, r) => s + r.total_quantity, 0),
+      }
+    })
+  }, [filteredRanking])
+  const priceRangeMax = Math.max(...priceRangeData.map(b => b.revenue), 1)
 
   const approxMonths = isPeriodFiltered ? null : Math.round((rowsFetched / 269393) * 120)
   const periodLabel  = selectedFrom && selectedTo ? `${selectedFrom} ～ ${selectedTo}` : isPeriodFiltered ? '全期間' : null
 
-  // HOD表示用
+  // HOD/DOW 表示用
   const activeHodData = activeHod !== null
-    ? hodTopItems.find(h => h.hour === activeHod)
-    : hodTopItems.find(h => h.hour === 21) ?? hodTopItems[0]
+    ? filteredHodTopItems.find(h => h.hour === activeHod)
+    : filteredHodTopItems.find(h => h.hour === 21) ?? filteredHodTopItems[0]
 
-  // DOW表示用
   const activeDowData = activeDow !== null
-    ? dowTopItems.find(d => d.dow === activeDow)
-    : dowTopItems[5] ?? dowTopItems[0] // 金曜
+    ? filteredDowTopItems.find(d => d.dow === activeDow)
+    : filteredDowTopItems[5] ?? filteredDowTopItems[0]
 
-  const hasTimeData = hodTopItems.some(h => h.items.length > 0) || dowTopItems.some(d => d.items.length > 0)
+  const activeHodCatHour = activeHodCat !== null ? activeHodCat : 20
+  const activeHodCatData = hodCategoryData.find(h => h.hour === activeHodCatHour)
+
+  const hasTimeData = filteredHodTopItems.some(h => h.items.length > 0) || filteredDowTopItems.some(d => d.items.length > 0)
+
+  // 月別カテゴリ用カラーマップ
+  const allCatsInMonthly = useMemo(() => {
+    const s = new Set<string>()
+    for (const m of monthlyCategoryData) for (const c of m.categories) s.add(c.name)
+    return [...s].slice(0, 10)
+  }, [monthlyCategoryData])
 
   return (
     <div className={`max-w-6xl mx-auto space-y-6 transition-opacity duration-150 ${isPending ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -222,7 +317,7 @@ export default function ItemsClient({
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap mb-4">
           <input type="date" value={localFrom} onChange={e => setLocalFrom(e.target.value)}
             className="text-sm border border-slate-200 rounded px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400" />
           <span className="text-slate-400 text-sm">〜</span>
@@ -233,56 +328,109 @@ export default function ItemsClient({
             適用
           </button>
         </div>
+
+        {/* 除外フィルタ */}
+        <div className="flex items-center gap-4 pt-3 border-t border-slate-100 flex-wrap">
+          <span className="text-xs font-semibold text-slate-500">除外設定:</span>
+          {[
+            { key: 'service',  label: 'サービス料を除外', state: excludeService,  set: setExcludeService  },
+            { key: 'mizutaki', label: '水炊きを除外',     state: excludeMizutaki, set: setExcludeMizutaki },
+          ].map(({ key, label, state, set }) => (
+            <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={state} onChange={e => set(e.target.checked)}
+                className="w-4 h-4 accent-blue-600" />
+              <span className="text-xs text-slate-600">{label}</span>
+            </label>
+          ))}
+        </div>
       </div>
+
+      {/* 新商品アラート */}
+      {newItemData.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm font-bold text-amber-700">新商品アラート</span>
+            <span className="text-xs text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full">直近3ヶ月に初登場</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {newItemData.map((item, i) => (
+              <span key={i} className="text-xs bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1 rounded-full">
+                {item.name}
+                <span className="ml-1.5 text-amber-500 font-normal">{item.firstYear}/{String(item.firstMonth).padStart(2,'0')}〜</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* カテゴリ別売上構成（ドーナツ + バー） */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-        <h2 className="text-sm font-bold text-slate-600 mb-4">カテゴリ別売上構成</h2>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h2 className="text-sm font-bold text-slate-600">カテゴリ別売上構成</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => setSelectedCats(null)}
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${selectedCats === null ? 'bg-blue-600 text-white border-blue-600' : 'text-slate-500 border-slate-300 hover:border-blue-400'}`}>
+              全選択
+            </button>
+            <button onClick={() => setSelectedCats(new Set())}
+              className="text-xs px-3 py-1 rounded-full border border-slate-300 text-slate-500 hover:border-red-400 hover:text-red-500 transition-colors">
+              全解除
+            </button>
+          </div>
+        </div>
         {categoryStats.length === 0 ? (
           <p className="text-slate-400 text-sm text-center py-6">データがありません</p>
         ) : (
-          <div className="flex flex-col lg:flex-row gap-6 items-start">
-            {/* ドーナツ */}
-            <div className="flex flex-col items-center gap-3 shrink-0">
-              <DonutChart data={donutData} size={140} />
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                {donutData.slice(0, 8).map((d, i) => (
-                  <div key={i} className="flex items-center gap-1.5 text-xs text-slate-600">
-                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: d.color }} />
-                    <span className="truncate max-w-20">{d.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {/* バーチャート */}
-            <div className="flex-1 space-y-2 w-full">
-              {categoryStats.map((c, i) => {
-                const pct = totalRevenue > 0 ? (c.amount / totalRevenue) * 100 : 0
+          <>
+            {/* カテゴリチェックボックス */}
+            <div className="flex flex-wrap gap-1.5 mb-4 p-3 bg-slate-50 rounded-lg">
+              {allCategories.map((cat, i) => {
+                const isSelected = selectedCats === null || selectedCats.has(cat)
                 return (
-                  <div key={c.name} className="flex items-center gap-3 group"
-                    title={`${c.name}: ${yen(c.amount)} (${pct.toFixed(1)}%)`}>
-                    <span
-                      className="text-sm text-slate-600 w-32 shrink-0 truncate cursor-pointer hover:text-blue-600 transition-colors"
-                      onClick={() => setSelCategory(c.name === selCategory ? 'all' : c.name)}>
-                      {c.name}
-                    </span>
-                    <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${(c.amount / maxCategory) * 100}%`,
-                          backgroundColor: DONUT_COLORS[i] ?? '#94a3b8',
-                          opacity: selCategory === c.name ? 1 : 0.75,
-                        }} />
-                    </div>
-                    <span className="text-xs text-slate-400 w-8 text-right tabular-nums">{pct.toFixed(0)}%</span>
-                    <span className="text-sm font-semibold text-slate-700 w-24 text-right shrink-0 tabular-nums">{yen(c.amount)}</span>
-                    <span className="text-xs text-slate-400 w-14 text-right shrink-0 tabular-nums">{c.quantity.toLocaleString()}点</span>
-                  </div>
+                  <button key={cat} onClick={() => toggleCat(cat)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-all border ${
+                      isSelected ? 'border-transparent text-white' : 'bg-white border-slate-200 text-slate-400'
+                    }`}
+                    style={isSelected ? { backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] } : {}}>
+                    {cat}
+                  </button>
                 )
               })}
             </div>
-          </div>
+            <div className="flex flex-col lg:flex-row gap-6 items-start">
+              <div className="flex flex-col items-center gap-3 shrink-0">
+                <DonutChart data={donutData} size={140} />
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  {donutData.slice(0, 8).map((d, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: d.color }} />
+                      <span className="truncate max-w-20">{d.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1 space-y-2 w-full">
+                {categoryStats.map((c, i) => {
+                  const pct = totalRevenue > 0 ? (c.amount / totalRevenue) * 100 : 0
+                  return (
+                    <div key={c.name} className="flex items-center gap-3 group">
+                      <span className="text-sm text-slate-600 w-32 shrink-0 truncate cursor-pointer hover:text-blue-600 transition-colors"
+                        onClick={() => toggleCat(c.name)}>
+                        {c.name}
+                      </span>
+                      <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+                        <div className="h-full rounded-full transition-all"
+                          style={{ width: `${(c.amount / maxCategory) * 100}%`, backgroundColor: DONUT_COLORS[i] ?? '#94a3b8', opacity: (selectedCats === null || selectedCats.has(c.name)) ? 1 : 0.3 }} />
+                      </div>
+                      <span className="text-xs text-slate-400 w-8 text-right tabular-nums">{pct.toFixed(0)}%</span>
+                      <span className="text-sm font-semibold text-slate-700 w-24 text-right shrink-0 tabular-nums">{yen(c.amount)}</span>
+                      <span className="text-xs text-slate-400 w-14 text-right shrink-0 tabular-nums">{c.quantity.toLocaleString()}点</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -292,8 +440,8 @@ export default function ItemsClient({
           <h2 className="text-sm font-bold text-slate-600">
             商品ランキング（売上貢献度）
             <span className="ml-2 text-xs font-normal text-slate-400">
-              {filtered.length < ranking.length
-                ? `${filtered.length.toLocaleString()} / ${ranking.length.toLocaleString()}件`
+              {searchFiltered.length < ranking.length
+                ? `${searchFiltered.length.toLocaleString()} / ${ranking.length.toLocaleString()}件`
                 : `${ranking.length.toLocaleString()}件`}
             </span>
           </h2>
@@ -308,16 +456,11 @@ export default function ItemsClient({
                 販売数量
               </button>
             </div>
-            <select value={selCategory} onChange={e => setSelCategory(e.target.value)}
-              className="text-xs border border-slate-200 rounded px-2 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
-              {categories.map(c => <option key={c} value={c}>{c === 'all' ? 'すべてのカテゴリ' : c}</option>)}
-            </select>
             <input type="text" placeholder="商品名で絞り込み" value={search}
               onChange={e => setSearch(e.target.value)}
               className="text-xs border border-slate-200 rounded px-3 py-1.5 text-slate-600 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-            {(search || selCategory !== 'all') && (
-              <button onClick={() => { setSearch(''); setSelCategory('all') }}
-                className="text-xs text-blue-500 hover:text-blue-700">リセット</button>
+            {search && (
+              <button onClick={() => setSearch('')} className="text-xs text-blue-500 hover:text-blue-700">リセット</button>
             )}
           </div>
         </div>
@@ -333,13 +476,15 @@ export default function ItemsClient({
                 <th className="text-right py-2 text-xs text-slate-400 font-medium">売上</th>
                 <th className="text-right py-2 text-xs text-slate-400 font-medium">構成比</th>
                 <th className="text-right py-2 text-xs text-slate-400 font-medium">数量</th>
+                <th className="text-right py-2 text-xs text-slate-400 font-medium hidden md:table-cell">単価</th>
               </tr>
             </thead>
             <tbody>
               {abcData.length === 0 ? (
-                <tr><td colSpan={7} className="py-10 text-center text-slate-400 text-xs">該当する商品がありません</td></tr>
+                <tr><td colSpan={8} className="py-10 text-center text-slate-400 text-xs">該当する商品がありません</td></tr>
               ) : abcData.map((item, i) => {
-                const share = totalRevenue > 0 ? (item.total_revenue / totalRevenue) * 100 : 0
+                const share    = totalRevenue > 0 ? (item.total_revenue / totalRevenue) * 100 : 0
+                const unitPrice = item.total_quantity > 0 ? Math.round(item.total_revenue / item.total_quantity) : 0
                 return (
                   <tr key={`${item.menu_item_id}-${i}`} className="border-b border-slate-50 hover:bg-slate-50">
                     <td className="py-2 text-slate-400 text-xs tabular-nums">{i + 1}</td>
@@ -358,6 +503,7 @@ export default function ItemsClient({
                       </div>
                     </td>
                     <td className="py-2 text-right text-slate-500 tabular-nums">{item.total_quantity.toLocaleString()}</td>
+                    <td className="py-2 text-right text-slate-400 text-xs tabular-nums hidden md:table-cell">{yen(unitPrice)}</td>
                   </tr>
                 )
               })}
@@ -383,7 +529,31 @@ export default function ItemsClient({
         </div>
       </div>
 
-      {/* 原価率ランキング（データなし表示） */}
+      {/* 価格帯別売上分析 */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+        <h2 className="text-sm font-bold text-slate-600 mb-4">価格帯別売上分析</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {priceRangeData.map((band, i) => {
+            const pct = totalRevenue > 0 ? (band.revenue / totalRevenue) * 100 : 0
+            return (
+              <div key={i} className="bg-slate-50 rounded-xl p-4">
+                <p className="text-xs font-semibold text-slate-500 mb-1">{band.label}</p>
+                <p className="text-lg font-bold text-slate-800 tabular-nums mb-1">{yen(band.revenue)}</p>
+                <div className="h-2 bg-slate-200 rounded-full overflow-hidden mb-2">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${(band.revenue / priceRangeMax) * 100}%`, backgroundColor: DONUT_COLORS[i] }} />
+                </div>
+                <div className="flex justify-between text-xs text-slate-400">
+                  <span>{band.count}品</span>
+                  <span>{pct.toFixed(1)}%</span>
+                  <span>{band.quantity.toLocaleString()}点</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 原価率（データなし） */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
         <h2 className="text-sm font-bold text-slate-600 mb-3">原価率ランキング</h2>
         <div className="bg-slate-50 rounded-lg p-4 text-center">
@@ -392,15 +562,15 @@ export default function ItemsClient({
         </div>
       </div>
 
-      {/* 一緒に注文される商品 */}
-      {pairingData.length > 0 && (
+      {/* よく一緒に注文される商品 TOP10 */}
+      {filteredPairing.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
           <h2 className="text-sm font-bold text-slate-600 mb-4">
             よく一緒に注文される商品
-            <span className="ml-2 text-xs font-normal text-slate-400">（セット提案用）</span>
+            <span className="ml-2 text-xs font-normal text-slate-400">（セット提案用 TOP10）</span>
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {pairingData.map((pair, i) => (
+            {filteredPairing.slice(0, 10).map((pair, i) => (
               <div key={i} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
                 <span className="text-xs text-slate-400 w-5 text-right shrink-0 tabular-nums">{i + 1}</span>
                 <span className="text-xs text-slate-700 font-medium truncate flex-1">{pair.item1}</span>
@@ -413,10 +583,102 @@ export default function ItemsClient({
         </div>
       )}
 
+      {/* 注文頻度ランキング（リピート率） */}
+      {filteredRepeatRate.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <h2 className="text-sm font-bold text-slate-600 mb-4">
+            注文頻度ランキング
+            <span className="ml-2 text-xs font-normal text-slate-400">（会計回数ベース）</span>
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left py-2 text-xs text-slate-400 font-medium w-8">#</th>
+                  <th className="text-left py-2 text-xs text-slate-400 font-medium">商品名</th>
+                  <th className="text-right py-2 text-xs text-slate-400 font-medium">会計回数</th>
+                  <th className="text-right py-2 text-xs text-slate-400 font-medium">販売数量</th>
+                  <th className="text-right py-2 text-xs text-slate-400 font-medium">会計あたり</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRepeatRate.map((item, i) => {
+                  const perCheckout = item.checkoutCount > 0 ? (item.totalQuantity / item.checkoutCount).toFixed(1) : '—'
+                  const maxCount = filteredRepeatRate[0]?.checkoutCount ?? 1
+                  return (
+                    <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="py-2 text-xs text-slate-400 tabular-nums">{i + 1}</td>
+                      <td className="py-2 text-slate-700 font-medium text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-slate-100 rounded-full h-1.5 max-w-24">
+                            <div className="h-full bg-blue-400 rounded-full" style={{ width: `${(item.checkoutCount / maxCount) * 100}%` }} />
+                          </div>
+                          <span className="truncate max-w-40">{item.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-2 text-right font-semibold text-blue-600 tabular-nums">{item.checkoutCount.toLocaleString()}回</td>
+                      <td className="py-2 text-right text-slate-500 tabular-nums">{item.totalQuantity.toLocaleString()}点</td>
+                      <td className="py-2 text-right text-slate-400 text-xs tabular-nums">{perCheckout}点/回</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 時間帯×カテゴリ クロス集計 */}
+      {hodCategoryData.some(h => h.categories.length > 0) && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <h2 className="text-sm font-bold text-slate-600 mb-3">
+            時間帯×カテゴリ クロス集計
+            <span className="ml-2 text-xs font-normal text-slate-400">（17〜翌1時）</span>
+          </h2>
+          <div className="flex gap-1 flex-wrap mb-3">
+            {HOD_RANGE.map(h => {
+              const hasData = hodCategoryData.find(d => d.hour === h)?.categories.length ?? 0
+              return (
+                <button key={h}
+                  onClick={() => setActiveHodCat(h)}
+                  className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                    activeHodCatHour === h
+                      ? 'bg-emerald-500 text-white border-emerald-500'
+                      : hasData > 0 ? 'text-slate-600 border-slate-300 hover:border-emerald-400' : 'text-slate-300 border-slate-200'
+                  }`}>
+                  {h === 0 ? '0時' : h === 1 ? '1時' : `${h}時`}
+                </button>
+              )
+            })}
+          </div>
+          {(activeHodCatData?.categories.length ?? 0) === 0 ? (
+            <p className="text-slate-400 text-xs py-4 text-center">データがありません</p>
+          ) : (
+            <div className="space-y-2">
+              {(() => {
+                const cats = activeHodCatData?.categories ?? []
+                const catMax = cats[0]?.total ?? 1
+                return cats.map((cat, i) => {
+                  const pct = (cat.total / catMax) * 100
+                  return (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="text-xs text-slate-600 w-32 shrink-0 truncate">{cat.name}</span>
+                      <div className="flex-1 bg-slate-100 rounded-full h-3 overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: CAT_COLORS[i] ?? '#94a3b8' }} />
+                      </div>
+                      <span className="text-xs font-semibold text-slate-700 w-20 text-right tabular-nums shrink-0">{yen(cat.total)}</span>
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 時間帯別人気商品 + 曜日別人気商品 */}
       {hasTimeData && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 時間帯別 */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
             <h2 className="text-sm font-bold text-slate-600 mb-3">
               時間帯別人気商品
@@ -424,10 +686,9 @@ export default function ItemsClient({
             </h2>
             <div className="flex gap-1 flex-wrap mb-3">
               {HOD_RANGE.map(h => {
-                const hasData = hodTopItems.find(d => d.hour === h)?.items.length ?? 0
+                const hasData = filteredHodTopItems.find(d => d.hour === h)?.items.length ?? 0
                 return (
-                  <button key={h}
-                    onClick={() => setActiveHod(activeHod === h ? null : h)}
+                  <button key={h} onClick={() => setActiveHod(h)}
                     className={`px-2 py-0.5 text-xs rounded border transition-colors ${
                       (activeHod ?? 21) === h
                         ? 'bg-amber-500 text-white border-amber-500'
@@ -453,13 +714,11 @@ export default function ItemsClient({
             )}
           </div>
 
-          {/* 曜日別 */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-            <h2 className="text-sm font-bold text-slate-600 mb-3">曜日別人気商品</h2>
+            <h2 className="text-sm font-bold text-slate-600 mb-3">曜日別人気商品 TOP5</h2>
             <div className="flex gap-1 flex-wrap mb-3">
-              {dowTopItems.map(d => (
-                <button key={d.dow}
-                  onClick={() => setActiveDow(activeDow === d.dow ? null : d.dow)}
+              {filteredDowTopItems.map(d => (
+                <button key={d.dow} onClick={() => setActiveDow(d.dow)}
                   className={`px-2 py-0.5 text-xs rounded border transition-colors font-semibold ${
                     (activeDow ?? 5) === d.dow
                       ? 'bg-blue-600 text-white border-blue-600'
@@ -488,6 +747,71 @@ export default function ItemsClient({
         </div>
       )}
 
+      {/* 月別カテゴリ構成比の推移 */}
+      {monthlyCategoryData.length > 1 && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <h2 className="text-sm font-bold text-slate-600 mb-4">月別カテゴリ構成比の推移</h2>
+          <div className="overflow-x-auto">
+            <table className="text-xs border-collapse min-w-full">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="text-left py-2 pr-3 text-slate-400 font-medium w-20">月</th>
+                  {allCatsInMonthly.map(cat => (
+                    <th key={cat} className="text-right py-2 px-2 text-slate-400 font-medium">{cat}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyCategoryData.map(row => {
+                  const rowTotal = row.categories.reduce((s, c) => s + c.total, 0)
+                  return (
+                    <tr key={row.month} className="border-b border-slate-50 hover:bg-slate-50">
+                      <td className="py-2 pr-3 text-slate-600 font-medium">{row.month}</td>
+                      {allCatsInMonthly.map((cat, ci) => {
+                        const c = row.categories.find(c => c.name === cat)
+                        const pct = rowTotal > 0 && c ? ((c.total / rowTotal) * 100) : 0
+                        return (
+                          <td key={cat} className="py-2 px-2 text-right">
+                            {pct > 0 ? (
+                              <span className="inline-block px-1.5 py-0.5 rounded text-white text-xs tabular-nums"
+                                style={{ backgroundColor: `${CAT_COLORS[ci]}${Math.round(pct * 2.55).toString(16).padStart(2,'0')}` }}>
+                                {pct.toFixed(0)}%
+                              </span>
+                            ) : <span className="text-slate-200">—</span>}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {/* ミニ積み上げバー */}
+          <div className="mt-4 space-y-1">
+            {monthlyCategoryData.map(row => {
+              const rowTotal = row.categories.reduce((s, c) => s + c.total, 0)
+              return (
+                <div key={row.month} className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 w-16 shrink-0">{row.month}</span>
+                  <div className="flex-1 h-4 flex rounded overflow-hidden">
+                    {row.categories.slice(0, 8).map((cat, ci) => {
+                      const globalIdx = allCatsInMonthly.indexOf(cat.name)
+                      const pct = rowTotal > 0 ? (cat.total / rowTotal) * 100 : 0
+                      return (
+                        <div key={ci} className="h-full" style={{ width: `${pct}%`, backgroundColor: CAT_COLORS[globalIdx >= 0 ? globalIdx : ci] ?? '#94a3b8' }}
+                          title={`${cat.name}: ${yen(cat.total)}`} />
+                      )
+                    })}
+                  </div>
+                  <span className="text-xs text-slate-400 w-20 text-right tabular-nums shrink-0">{yen(rowTotal)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 季節別売上 */}
       {seasonalData.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
@@ -495,15 +819,17 @@ export default function ItemsClient({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {seasonalData.map(s => (
               <div key={s.key} className="bg-slate-50 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-2">
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${SEASON_COLORS[s.key]}`}>{s.label}</span>
                 </div>
-                <p className="text-base font-bold text-slate-700 tabular-nums mb-2">{yen(s.total)}</p>
+                <p className="text-lg font-bold text-slate-700 tabular-nums">{yen(s.total)}</p>
+                <p className="text-xs text-slate-400 mb-3">{s.checkoutCount.toLocaleString()}会計 / 客単価 {s.checkoutCount > 0 ? yen(Math.round(s.total / s.checkoutCount)) : '—'}</p>
                 <div className="space-y-1">
                   {s.items.map((item, i) => (
                     <div key={i} className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-400 tabular-nums w-3">{i + 1}</span>
-                      <span className="text-xs text-slate-600 truncate">{item.name}</span>
+                      <span className="text-xs font-bold text-slate-400 tabular-nums w-3">{i + 1}</span>
+                      <span className="text-xs text-slate-600 truncate flex-1">{item.name}</span>
+                      <span className="text-xs text-slate-400 tabular-nums shrink-0">{yen(item.rev)}</span>
                     </div>
                   ))}
                 </div>
