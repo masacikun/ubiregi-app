@@ -42,3 +42,14 @@ jobs:
             npm ci --omit=dev
             pm2 restart ubiregi-app || pm2 start npm --name ubiregi-app -- start
             echo "✓ ubiregi-app deployed"
+
+      - name: Update SYSTEM.md on VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            curl -fsSL "https://raw.githubusercontent.com/masacikun/smile-mgmt/main/SYSTEM.md" \
+              -o /var/www/SYSTEM.md
+            echo "✓ /var/www/SYSTEM.md を更新しました"
