@@ -35,11 +35,11 @@ const SEASON_COLORS: Record<string, string> = {
   spring: 'bg-pink-100 text-pink-700',
   summer: 'bg-sky-100 text-sky-700',
   fall:   'bg-amber-100 text-amber-700',
-  winter: 'bg-slate-100 text-slate-600',
+  winter: 'bg-gray-100 dark:bg-gray-800 text-slate-600',
 }
 const DONUT_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16','#ec4899','#6366f1']
 const CAT_COLORS   = DONUT_COLORS
-const ABC_COLORS   = { A: 'bg-emerald-100 text-emerald-700', B: 'bg-amber-100 text-amber-700', C: 'bg-slate-100 text-slate-500' }
+const ABC_COLORS   = { A: 'bg-emerald-100 text-emerald-700', B: 'bg-amber-100 text-amber-700', C: 'bg-gray-100 dark:bg-gray-800 text-slate-500' }
 
 function yen(n: number) {
   return n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
@@ -281,24 +281,24 @@ export default function ItemsClient({
       {/* ヘッダー + フィルタ */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-          <h1 className="text-xl font-bold text-slate-700">商品分析</h1>
+          <h1 className="text-xl font-bold text-gray-700 dark:text-gray-300">商品分析</h1>
           <div className="flex items-center gap-2 flex-wrap">
             {storeOptions.map(s => (
               <button key={s.id} onClick={() => navigate(selectedFrom, selectedTo, s.id)} disabled={isPending}
                 className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  currentA === s.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  currentA === s.id ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-slate-600 hover:bg-slate-200'
                 }`}>
                 {s.label}
               </button>
             ))}
-            <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-3 py-1">
+            <span className="text-xs text-slate-400 bg-gray-100 dark:bg-gray-800 rounded-full px-3 py-1">
               {periodLabel
                 ? `期間: ${periodLabel} (${rowsFetched.toLocaleString()}件)`
                 : approxMonths != null ? `直近約${approxMonths}ヶ月 (${rowsFetched.toLocaleString()}件)` : `${rowsFetched.toLocaleString()}件`}
             </span>
             <button
               onClick={() => downloadCSV(abcData as unknown as Record<string, unknown>[], `items_${selectedFrom??'all'}.csv`)}
-              className="text-xs text-slate-500 border border-slate-300 rounded px-3 py-1.5 hover:bg-slate-50">
+              className="text-xs text-gray-500 dark:text-gray-400 border border-slate-300 rounded px-3 py-1.5 hover:bg-gray-50 dark:bg-gray-800">
               ↓ CSV
             </button>
             {isPending && <span className="flex items-center gap-1.5 text-xs text-blue-500"><span className="w-3 h-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin inline-block" />読み込み中…</span>}
@@ -319,10 +319,10 @@ export default function ItemsClient({
         </div>
         <div className="flex items-center gap-2 flex-wrap mb-4">
           <input type="date" value={localFrom} onChange={e => setLocalFrom(e.target.value)}
-            className="text-sm border border-slate-200 rounded px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+            className="text-sm border border-gray-200 dark:border-gray-700 rounded px-2 py-1.5 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-400" />
           <span className="text-slate-400 text-sm">〜</span>
           <input type="date" value={localTo} onChange={e => setLocalTo(e.target.value)}
-            className="text-sm border border-slate-200 rounded px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+            className="text-sm border border-gray-200 dark:border-gray-700 rounded px-2 py-1.5 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-400" />
           <button onClick={() => navigate(localFrom || null, localTo || null)} disabled={isPending}
             className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors disabled:opacity-50">
             適用
@@ -331,7 +331,7 @@ export default function ItemsClient({
 
         {/* 除外フィルタ */}
         <div className="flex items-center gap-4 pt-3 border-t border-slate-100 flex-wrap">
-          <span className="text-xs font-semibold text-slate-500">除外設定:</span>
+          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">除外設定:</span>
           {[
             { key: 'service',  label: 'サービス料を除外', state: excludeService,  set: setExcludeService  },
             { key: 'mizutaki', label: '水炊きを除外',     state: excludeMizutaki, set: setExcludeMizutaki },
@@ -369,11 +369,11 @@ export default function ItemsClient({
           <h2 className="text-sm font-bold text-slate-600">カテゴリ別売上構成</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setSelectedCats(null)}
-              className={`text-xs px-3 py-1 rounded-full border transition-colors ${selectedCats === null ? 'bg-blue-600 text-white border-blue-600' : 'text-slate-500 border-slate-300 hover:border-blue-400'}`}>
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${selectedCats === null ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-500 dark:text-gray-400 border-slate-300 hover:border-blue-400'}`}>
               全選択
             </button>
             <button onClick={() => setSelectedCats(new Set())}
-              className="text-xs px-3 py-1 rounded-full border border-slate-300 text-slate-500 hover:border-red-400 hover:text-red-500 transition-colors">
+              className="text-xs px-3 py-1 rounded-full border border-slate-300 text-gray-500 dark:text-gray-400 hover:border-red-400 hover:text-red-500 transition-colors">
               全解除
             </button>
           </div>
@@ -383,13 +383,13 @@ export default function ItemsClient({
         ) : (
           <>
             {/* カテゴリチェックボックス */}
-            <div className="flex flex-wrap gap-1.5 mb-4 p-3 bg-slate-50 rounded-lg">
+            <div className="flex flex-wrap gap-1.5 mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
               {allCategories.map((cat, i) => {
                 const isSelected = selectedCats === null || selectedCats.has(cat)
                 return (
                   <button key={cat} onClick={() => toggleCat(cat)}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-all border ${
-                      isSelected ? 'border-transparent text-white' : 'bg-white border-slate-200 text-slate-400'
+                      isSelected ? 'border-transparent text-white' : 'bg-white border-gray-200 dark:border-gray-700 text-slate-400'
                     }`}
                     style={isSelected ? { backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] } : {}}>
                     {cat}
@@ -418,12 +418,12 @@ export default function ItemsClient({
                         onClick={() => toggleCat(c.name)}>
                         {c.name}
                       </span>
-                      <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+                      <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-4 overflow-hidden">
                         <div className="h-full rounded-full transition-all"
                           style={{ width: `${(c.amount / maxCategory) * 100}%`, backgroundColor: DONUT_COLORS[i] ?? '#94a3b8', opacity: (selectedCats === null || selectedCats.has(c.name)) ? 1 : 0.3 }} />
                       </div>
                       <span className="text-xs text-slate-400 w-8 text-right tabular-nums">{pct.toFixed(0)}%</span>
-                      <span className="text-sm font-semibold text-slate-700 w-24 text-right shrink-0 tabular-nums">{yen(c.amount)}</span>
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 w-24 text-right shrink-0 tabular-nums">{yen(c.amount)}</span>
                       <span className="text-xs text-slate-400 w-14 text-right shrink-0 tabular-nums">{c.quantity.toLocaleString()}点</span>
                     </div>
                   )
@@ -446,19 +446,19 @@ export default function ItemsClient({
             </span>
           </h2>
           <div className="flex gap-2 flex-wrap items-center">
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+            <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
               <button onClick={() => setSort('revenue')}
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${sort==='revenue' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
                 売上金額
               </button>
               <button onClick={() => setSort('quantity')}
-                className={`px-3 py-1.5 text-xs font-medium border-l border-slate-200 transition-colors ${sort==='quantity' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                className={`px-3 py-1.5 text-xs font-medium border-l border-gray-200 dark:border-gray-700 transition-colors ${sort==='quantity' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
                 販売数量
               </button>
             </div>
             <input type="text" placeholder="商品名で絞り込み" value={search}
               onChange={e => setSearch(e.target.value)}
-              className="text-xs border border-slate-200 rounded px-3 py-1.5 text-slate-600 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+              className="text-xs border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-slate-600 w-36 focus:outline-none focus:ring-1 focus:ring-blue-400" />
             {search && (
               <button onClick={() => setSearch('')} className="text-xs text-blue-500 hover:text-blue-700">リセット</button>
             )}
@@ -486,23 +486,23 @@ export default function ItemsClient({
                 const share    = totalRevenue > 0 ? (item.total_revenue / totalRevenue) * 100 : 0
                 const unitPrice = item.total_quantity > 0 ? Math.round(item.total_revenue / item.total_quantity) : 0
                 return (
-                  <tr key={`${item.menu_item_id}-${i}`} className="border-b border-slate-50 hover:bg-slate-50">
+                  <tr key={`${item.menu_item_id}-${i}`} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
                     <td className="py-2 text-slate-400 text-xs tabular-nums">{i + 1}</td>
                     <td className="py-2">
                       <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${ABC_COLORS[item.abc]}`}>{item.abc}</span>
                     </td>
-                    <td className="py-2 text-slate-700 font-medium max-w-48 truncate">{item.menu_item_name || '（名称不明）'}</td>
+                    <td className="py-2 text-gray-700 dark:text-gray-300 font-medium max-w-48 truncate">{item.menu_item_name || '（名称不明）'}</td>
                     <td className="py-2 text-slate-400 text-xs hidden md:table-cell">{item.category_name ?? '—'}</td>
-                    <td className="py-2 text-right font-semibold text-slate-700 tabular-nums">{yen(item.total_revenue)}</td>
+                    <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{yen(item.total_revenue)}</td>
                     <td className="py-2 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <div className="w-12 bg-slate-100 rounded-full h-1.5">
+                        <div className="w-12 bg-gray-100 dark:bg-gray-800 rounded-full h-1.5">
                           <div className="h-full bg-violet-400 rounded-full" style={{ width: `${Math.min(share * 5, 100)}%` }} />
                         </div>
                         <span className="text-xs text-slate-400 w-8 text-right tabular-nums">{share.toFixed(1)}%</span>
                       </div>
                     </td>
-                    <td className="py-2 text-right text-slate-500 tabular-nums">{item.total_quantity.toLocaleString()}</td>
+                    <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{item.total_quantity.toLocaleString()}</td>
                     <td className="py-2 text-right text-slate-400 text-xs tabular-nums hidden md:table-cell">{yen(unitPrice)}</td>
                   </tr>
                 )
@@ -519,7 +519,7 @@ export default function ItemsClient({
             return (
               <div key={grade} className="flex items-center gap-2">
                 <span className={`text-xs font-bold px-2 py-0.5 rounded ${ABC_COLORS[grade]}`}>{grade}</span>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
                   {items.length}品 / {totalRevenue > 0 ? ((rev/totalRevenue)*100).toFixed(0) : 0}%
                   {grade==='A'?' (売上上位80%)':grade==='B'?' (80〜95%)':' (95〜100%)'}
                 </span>
@@ -536,8 +536,8 @@ export default function ItemsClient({
           {priceRangeData.map((band, i) => {
             const pct = totalRevenue > 0 ? (band.revenue / totalRevenue) * 100 : 0
             return (
-              <div key={i} className="bg-slate-50 rounded-xl p-4">
-                <p className="text-xs font-semibold text-slate-500 mb-1">{band.label}</p>
+              <div key={i} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">{band.label}</p>
                 <p className="text-lg font-bold text-slate-800 tabular-nums mb-1">{yen(band.revenue)}</p>
                 <div className="h-2 bg-slate-200 rounded-full overflow-hidden mb-2">
                   <div className="h-full rounded-full transition-all" style={{ width: `${(band.revenue / priceRangeMax) * 100}%`, backgroundColor: DONUT_COLORS[i] }} />
@@ -556,8 +556,8 @@ export default function ItemsClient({
       {/* 原価率（データなし） */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
         <h2 className="text-sm font-bold text-slate-600 mb-3">原価率ランキング</h2>
-        <div className="bg-slate-50 rounded-lg p-4 text-center">
-          <p className="text-sm text-slate-500">原価データが未登録です</p>
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">原価データが未登録です</p>
           <p className="text-xs text-slate-400 mt-1">ユビレジ管理画面で各商品の原価を設定すると、ここに原価率ランキングが表示されます</p>
         </div>
       </div>
@@ -571,11 +571,11 @@ export default function ItemsClient({
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {filteredPairing.slice(0, 10).map((pair, i) => (
-              <div key={i} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2">
+              <div key={i} className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2">
                 <span className="text-xs text-slate-400 w-5 text-right shrink-0 tabular-nums">{i + 1}</span>
-                <span className="text-xs text-slate-700 font-medium truncate flex-1">{pair.item1}</span>
+                <span className="text-xs text-gray-700 dark:text-gray-300 font-medium truncate flex-1">{pair.item1}</span>
                 <span className="text-xs text-slate-400 shrink-0">×</span>
-                <span className="text-xs text-slate-700 font-medium truncate flex-1">{pair.item2}</span>
+                <span className="text-xs text-gray-700 dark:text-gray-300 font-medium truncate flex-1">{pair.item2}</span>
                 <span className="text-xs text-blue-500 font-semibold shrink-0 tabular-nums">{pair.count}回</span>
               </div>
             ))}
@@ -606,18 +606,18 @@ export default function ItemsClient({
                   const perCheckout = item.checkoutCount > 0 ? (item.totalQuantity / item.checkoutCount).toFixed(1) : '—'
                   const maxCount = filteredRepeatRate[0]?.checkoutCount ?? 1
                   return (
-                    <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                    <tr key={i} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
                       <td className="py-2 text-xs text-slate-400 tabular-nums">{i + 1}</td>
-                      <td className="py-2 text-slate-700 font-medium text-sm">
+                      <td className="py-2 text-gray-700 dark:text-gray-300 font-medium text-sm">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 bg-slate-100 rounded-full h-1.5 max-w-24">
+                          <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 max-w-24">
                             <div className="h-full bg-blue-400 rounded-full" style={{ width: `${(item.checkoutCount / maxCount) * 100}%` }} />
                           </div>
                           <span className="truncate max-w-40">{item.name}</span>
                         </div>
                       </td>
                       <td className="py-2 text-right font-semibold text-blue-600 tabular-nums">{item.checkoutCount.toLocaleString()}回</td>
-                      <td className="py-2 text-right text-slate-500 tabular-nums">{item.totalQuantity.toLocaleString()}点</td>
+                      <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{item.totalQuantity.toLocaleString()}点</td>
                       <td className="py-2 text-right text-slate-400 text-xs tabular-nums">{perCheckout}点/回</td>
                     </tr>
                   )
@@ -663,10 +663,10 @@ export default function ItemsClient({
                   return (
                     <div key={i} className="flex items-center gap-3">
                       <span className="text-xs text-slate-600 w-32 shrink-0 truncate">{cat.name}</span>
-                      <div className="flex-1 bg-slate-100 rounded-full h-3 overflow-hidden">
+                      <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-3 overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: CAT_COLORS[i] ?? '#94a3b8' }} />
                       </div>
-                      <span className="text-xs font-semibold text-slate-700 w-20 text-right tabular-nums shrink-0">{yen(cat.total)}</span>
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-20 text-right tabular-nums shrink-0">{yen(cat.total)}</span>
                     </div>
                   )
                 })
@@ -706,7 +706,7 @@ export default function ItemsClient({
                 {activeHodData?.items.map((item, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="text-xs text-slate-400 w-4 text-right tabular-nums">{i + 1}</span>
-                    <span className="text-xs text-slate-700 flex-1 truncate">{item.name}</span>
+                    <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{item.name}</span>
                     <span className="text-xs font-semibold text-amber-600 tabular-nums">{item.quantity.toLocaleString()}点</span>
                   </div>
                 ))}
@@ -737,7 +737,7 @@ export default function ItemsClient({
                 {activeDowData?.items.map((item, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="text-xs text-slate-400 w-4 text-right tabular-nums">{i + 1}</span>
-                    <span className="text-xs text-slate-700 flex-1 truncate">{item.name}</span>
+                    <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{item.name}</span>
                     <span className="text-xs font-semibold text-blue-600 tabular-nums">{item.quantity.toLocaleString()}点</span>
                   </div>
                 ))}
@@ -765,7 +765,7 @@ export default function ItemsClient({
                 {monthlyCategoryData.map(row => {
                   const rowTotal = row.categories.reduce((s, c) => s + c.total, 0)
                   return (
-                    <tr key={row.month} className="border-b border-slate-50 hover:bg-slate-50">
+                    <tr key={row.month} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
                       <td className="py-2 pr-3 text-slate-600 font-medium">{row.month}</td>
                       {allCatsInMonthly.map((cat, ci) => {
                         const c = row.categories.find(c => c.name === cat)
@@ -818,11 +818,11 @@ export default function ItemsClient({
           <h2 className="text-sm font-bold text-slate-600 mb-4">季節別売上</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {seasonalData.map(s => (
-              <div key={s.key} className="bg-slate-50 rounded-xl p-4">
+              <div key={s.key} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${SEASON_COLORS[s.key]}`}>{s.label}</span>
                 </div>
-                <p className="text-lg font-bold text-slate-700 tabular-nums">{yen(s.total)}</p>
+                <p className="text-lg font-bold text-gray-700 dark:text-gray-300 tabular-nums">{yen(s.total)}</p>
                 <p className="text-xs text-slate-400 mb-3">{s.checkoutCount.toLocaleString()}会計 / 客単価 {s.checkoutCount > 0 ? yen(Math.round(s.total / s.checkoutCount)) : '—'}</p>
                 <div className="space-y-1">
                   {s.items.map((item, i) => (

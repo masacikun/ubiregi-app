@@ -75,7 +75,7 @@ function KpiCard({ label, value, sub, trend }: { label: string; value: string; s
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col gap-1">
       <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{label}</p>
       <p className="text-2xl font-bold text-slate-800 leading-tight">{value}</p>
-      {sub && <p className="text-xs text-slate-500">{sub}</p>}
+      {sub && <p className="text-xs text-gray-500 dark:text-gray-400">{sub}</p>}
       {trend != null && (
         <p className={`text-xs font-semibold ${trend >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
           {trend >= 0 ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}% 前年比
@@ -86,7 +86,7 @@ function KpiCard({ label, value, sub, trend }: { label: string; value: string; s
 }
 
 function SparkLine({ values, color = '#3b82f6', height = 48 }: { values: number[]; color?: string; height?: number }) {
-  if (values.length < 2) return <div style={{ height }} className="bg-slate-50 rounded" />
+  if (values.length < 2) return <div style={{ height }} className="bg-gray-50 dark:bg-gray-800 rounded" />
   const W = 400
   const max = Math.max(...values, 1)
   const pts = values.map((v, i) => {
@@ -355,14 +355,14 @@ export default function SalesClient({
             {storeOptions.map(s => (
               <button key={s.id} onClick={() => navigate(selectedFrom, selectedTo, s.id)} disabled={isPending}
                 className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  currentA === s.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  currentA === s.id ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-slate-600 hover:bg-slate-200'
                 }`}>
                 {s.label}
               </button>
             ))}
             <button
               onClick={() => downloadCSV(dailyCurrent as unknown as Record<string, unknown>[], `sales_${selectedFrom}_${selectedTo}.csv`)}
-              className="text-xs text-slate-500 border border-slate-300 rounded px-3 py-1.5 hover:bg-slate-50 transition-colors">
+              className="text-xs text-gray-500 dark:text-gray-400 border border-slate-300 rounded px-3 py-1.5 hover:bg-gray-50 dark:bg-gray-800 transition-colors">
               ↓ CSV
             </button>
             {isPending && <span className="flex items-center gap-1.5 text-xs text-blue-500"><span className="w-3 h-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin inline-block" />読み込み中…</span>}
@@ -400,10 +400,10 @@ export default function SalesClient({
         {/* 日付入力 */}
         <div className="flex items-center gap-2 flex-wrap mb-4">
           <input type="date" value={localFrom} onChange={e => setLocalFrom(e.target.value)}
-            className="text-sm border border-slate-200 rounded px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+            className="text-sm border border-gray-200 dark:border-gray-700 rounded px-2 py-1.5 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-400" />
           <span className="text-slate-400 text-sm">〜</span>
           <input type="date" value={localTo} onChange={e => setLocalTo(e.target.value)}
-            className="text-sm border border-slate-200 rounded px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+            className="text-sm border border-gray-200 dark:border-gray-700 rounded px-2 py-1.5 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-400" />
           <button onClick={() => navigate(localFrom, localTo)} disabled={isPending}
             className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors disabled:opacity-50">
             適用
@@ -414,7 +414,7 @@ export default function SalesClient({
         {/* 月フィルタ */}
         <div className="pt-3 border-t border-slate-100">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-semibold text-slate-500 shrink-0">月絞込:</span>
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 shrink-0">月絞込:</span>
             {MONTH_NAMES.map((label, i) => {
               const m = i + 1
               return (
@@ -422,7 +422,7 @@ export default function SalesClient({
                   className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
                     selectedMonths.has(m)
                       ? 'bg-blue-600 text-white border-blue-600'
-                      : 'text-slate-500 border-slate-300 hover:border-blue-400'
+                      : 'text-gray-500 dark:text-gray-400 border-slate-300 hover:border-blue-400'
                   }`}>
                   {label}
                 </button>
@@ -532,22 +532,22 @@ export default function SalesClient({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">客単価推移</h2>
-              <span className="text-sm font-bold text-slate-700 tabular-nums">{yen(avgByDay[avgByDay.length - 1] ?? 0)}</span>
+              <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">客単価推移</h2>
+              <span className="text-sm font-bold text-gray-700 dark:text-gray-300 tabular-nums">{yen(avgByDay[avgByDay.length - 1] ?? 0)}</span>
             </div>
             <SparkLine values={avgByDay} color="#10b981" height={52} />
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">会計数推移</h2>
-              <span className="text-sm font-bold text-slate-700 tabular-nums">{countByDay[countByDay.length - 1]?.toLocaleString() ?? 0}件/日</span>
+              <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">会計数推移</h2>
+              <span className="text-sm font-bold text-gray-700 dark:text-gray-300 tabular-nums">{countByDay[countByDay.length - 1]?.toLocaleString() ?? 0}件/日</span>
             </div>
             <SparkLine values={countByDay} color="#8b5cf6" height={52} />
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest">値引き率推移</h2>
-              <span className="text-sm font-bold text-slate-700 tabular-nums">{(discountRateByDay[discountRateByDay.length - 1] ?? 0).toFixed(1)}%</span>
+              <h2 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">値引き率推移</h2>
+              <span className="text-sm font-bold text-gray-700 dark:text-gray-300 tabular-nums">{(discountRateByDay[discountRateByDay.length - 1] ?? 0).toFixed(1)}%</span>
             </div>
             <SparkLine values={discountRateByDay} color="#f59e0b" height={52} />
           </div>
@@ -578,27 +578,27 @@ export default function SalesClient({
                 const mom   = prevM && prevM.total > 0 ? ((row.total - prevM.total) / prevM.total) * 100 : null
                 const discRate = row.total > 0 ? (row.discount / row.total) * 100 : 0
                 return (
-                  <tr key={row.month} className="border-b border-slate-50 hover:bg-slate-50">
+                  <tr key={row.month} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
                     <td className="py-2 text-slate-600 text-sm">
                       {new Date(row.month + '-01T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
                     </td>
-                    <td className="py-2 text-right font-semibold text-slate-700 tabular-nums">{yen(row.total)}</td>
+                    <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{yen(row.total)}</td>
                     <td className="py-2 text-right">
                       {yoy != null ? <span className={`text-xs font-semibold ${yoy >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pctStr(yoy)}</span> : <span className="text-slate-300 text-xs">—</span>}
                     </td>
                     <td className="py-2 text-right">
                       {mom != null ? <span className={`text-xs font-semibold ${mom >= 0 ? 'text-blue-600' : 'text-slate-500'}`}>{pctStr(mom)}</span> : <span className="text-slate-300 text-xs">—</span>}
                     </td>
-                    <td className="py-2 text-right text-slate-500 tabular-nums">{row.count.toLocaleString()}</td>
-                    <td className="py-2 text-right text-slate-500 tabular-nums">{yen(row.count > 0 ? Math.round(row.total / row.count) : 0)}</td>
+                    <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{row.count.toLocaleString()}</td>
+                    <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{yen(row.count > 0 ? Math.round(row.total / row.count) : 0)}</td>
                     <td className="py-2 text-right text-red-400 tabular-nums">{yen(row.discount)}</td>
                     <td className="py-2 text-right text-slate-400 tabular-nums hidden md:table-cell">{discRate.toFixed(1)}%</td>
                   </tr>
                 )
               })}
               {monthlyRows.rows.length > 1 && (
-                <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
-                  <td className="py-2 text-slate-700">合計</td>
+                <tr className="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 font-semibold">
+                  <td className="py-2 text-gray-700 dark:text-gray-300">合計</td>
                   <td className="py-2 text-right text-slate-800 tabular-nums">{yen(monthlyRows.totals.total)}</td>
                   <td colSpan={2} />
                   <td className="py-2 text-right text-slate-600 tabular-nums">{monthlyRows.totals.count.toLocaleString()}</td>
@@ -632,11 +632,11 @@ export default function SalesClient({
               </thead>
               <tbody>
                 {weeklyData.map(row => (
-                  <tr key={row.week} className="border-b border-slate-50 hover:bg-slate-50">
+                  <tr key={row.week} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
                     <td className="py-2 text-slate-600 font-medium text-xs">{row.week}</td>
-                    <td className="py-2 text-right font-semibold text-slate-700 tabular-nums">{yen(row.total)}</td>
-                    <td className="py-2 text-right text-slate-500 tabular-nums">{row.count.toLocaleString()}</td>
-                    <td className="py-2 text-right text-slate-500 tabular-nums">{yen(row.days > 0 ? Math.round(row.total / row.days) : 0)}</td>
+                    <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{yen(row.total)}</td>
+                    <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{row.count.toLocaleString()}</td>
+                    <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{yen(row.days > 0 ? Math.round(row.total / row.days) : 0)}</td>
                     <td className="py-2 text-right text-red-400 tabular-nums">{yen(row.discount)}</td>
                     <td className="py-2 text-right text-slate-400 tabular-nums hidden md:table-cell">{row.days}日</td>
                   </tr>
@@ -656,8 +656,8 @@ export default function SalesClient({
             const pct = totalRev > 0 ? (band.total / totalRev) * 100 : 0
             const colors = ['bg-blue-400', 'bg-violet-400', 'bg-emerald-400']
             return (
-              <div key={i} className="bg-slate-50 rounded-xl p-4">
-                <p className="text-xs font-semibold text-slate-500 mb-1">{band.label}</p>
+              <div key={i} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">{band.label}</p>
                 <p className="text-base font-bold text-slate-800 tabular-nums">{yen(band.total)}</p>
                 <div className="h-1.5 bg-slate-200 rounded-full mt-2 mb-2">
                   <div className={`h-full rounded-full ${colors[i]}`} style={{ width: `${pct}%` }} />
@@ -683,10 +683,10 @@ export default function SalesClient({
               {dowDataFiltered.map(d => (
                 <div key={d.dow} className="flex items-center gap-2 group">
                   <span className={`text-sm font-bold w-5 shrink-0 ${DOW_COLORS_CLS[d.dow]}`}>{d.label}</span>
-                  <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden">
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-4 overflow-hidden">
                     <div className="h-full bg-blue-400 group-hover:bg-blue-500 rounded-full transition-all" style={{ width: `${(d.total / maxDow) * 100}%` }} />
                   </div>
-                  <span className="text-xs font-semibold text-slate-700 w-24 text-right shrink-0 tabular-nums">{yen(d.total)}</span>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-24 text-right shrink-0 tabular-nums">{yen(d.total)}</span>
                   <span className="text-xs text-slate-400 w-10 text-right shrink-0">{d.count}件</span>
                 </div>
               ))}
@@ -708,7 +708,7 @@ export default function SalesClient({
                   <div key={h.hour} className="flex-1 flex flex-col items-center gap-0 group"
                     title={`${h.hour}時: ${yen(h.total)} / ${h.count}件`}>
                   {/* 数値ラベル */}
-                  <span className="tabular-nums text-slate-500 mb-0.5 leading-none" style={{ fontSize: '7px' }}>
+                  <span className="tabular-nums text-gray-500 dark:text-gray-400 mb-0.5 leading-none" style={{ fontSize: '7px' }}>
                     {h.total >= 10000 ? `${Math.round(h.total/10000)}万` : ''}
                   </span>
                     <div className="flex-1 w-full flex items-end">
@@ -742,9 +742,9 @@ export default function SalesClient({
             </thead>
             <tbody>
               {dowStats.map(row => (
-                <tr key={row.dow} className="border-b border-slate-50 hover:bg-slate-50">
+                <tr key={row.dow} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
                   <td className={`py-2 font-bold text-sm ${DOW_COLORS_CLS[row.dow]}`}>{DOW_NAMES[row.dow]}</td>
-                  <td className="py-2 text-right font-semibold text-slate-700 tabular-nums">{row.count > 0 ? yen(row.avg) : '—'}</td>
+                  <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{row.count > 0 ? yen(row.avg) : '—'}</td>
                   <td className="py-2 text-right text-emerald-600 tabular-nums">{row.count > 0 ? yen(row.max) : '—'}</td>
                   <td className="py-2 text-right text-red-400 tabular-nums">{row.count > 0 ? yen(row.min) : '—'}</td>
                   <td className="py-2 text-right text-slate-400 tabular-nums">{row.count}日</td>
@@ -763,10 +763,10 @@ export default function SalesClient({
             { label: '平日（月〜金）', data: weekdayWeekend.weekday, color: 'bg-blue-100 text-blue-700' },
             { label: '週末（土・日）', data: weekdayWeekend.weekend, color: 'bg-violet-100 text-violet-700' },
           ].map(({ label, data, color }) => (
-            <div key={label} className="bg-slate-50 rounded-xl p-4">
+            <div key={label} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color} mb-3 inline-block`}>{label}</span>
               <p className="text-xl font-bold text-slate-800 tabular-nums">{yen(data.total)}</p>
-              <p className="text-xs text-slate-500 mt-1">日平均: <span className="font-semibold text-slate-700">{yen(data.avg)}</span></p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">日平均: <span className="font-semibold text-gray-700 dark:text-gray-300">{yen(data.avg)}</span></p>
               <p className="text-xs text-slate-400">{data.days}日 / {data.count.toLocaleString()}会計</p>
             </div>
           ))}
@@ -791,10 +791,10 @@ export default function SalesClient({
                     <span className="text-xs text-slate-400 w-4 tabular-nums">{i+1}</span>
                     <span className={`text-xs font-bold w-4 ${DOW_COLORS_CLS[dow]}`}>{DOW_NAMES[dow]}</span>
                     <span className="text-xs text-slate-600 w-24">{d.sale_date}</span>
-                    <div className="flex-1 bg-slate-100 rounded-full h-2">
+                    <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
                       <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${(Number(d.total) / Number(sortedDays[0]?.total ?? 1)) * 100}%` }} />
                     </div>
-                    <span className="text-xs font-semibold text-slate-700 w-20 text-right tabular-nums">{yen(Number(d.total))}</span>
+                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-20 text-right tabular-nums">{yen(Number(d.total))}</span>
                   </div>
                 )
               })}
@@ -810,10 +810,10 @@ export default function SalesClient({
                     <span className="text-xs text-slate-400 w-4 tabular-nums">{i+1}</span>
                     <span className={`text-xs font-bold w-4 ${DOW_COLORS_CLS[dow]}`}>{DOW_NAMES[dow]}</span>
                     <span className="text-xs text-slate-600 w-24">{d.sale_date}</span>
-                    <div className="flex-1 bg-slate-100 rounded-full h-2">
+                    <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-2">
                       <div className="h-full bg-rose-400 rounded-full" style={{ width: `${(Number(d.total) / Number(sortedDays[0]?.total ?? 1)) * 100}%` }} />
                     </div>
-                    <span className="text-xs font-semibold text-slate-700 w-20 text-right tabular-nums">{yen(Number(d.total))}</span>
+                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-20 text-right tabular-nums">{yen(Number(d.total))}</span>
                   </div>
                 )
               })}
@@ -895,16 +895,16 @@ export default function SalesClient({
                 const totalHod = hodTableData.reduce((s, r) => s + r.total, 0)
                 const pct = totalHod > 0 ? (row.total / totalHod) * 100 : 0
                 return (
-                  <tr key={row.hour} className="border-b border-slate-50 hover:bg-slate-50">
+                  <tr key={row.hour} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
                     <td className="py-2 text-slate-600 font-medium text-sm">
                       {row.hour === 0 ? '0時（深夜）' : row.hour === 1 ? '1時（深夜）' : `${row.hour}時`}
                     </td>
-                    <td className="py-2 text-right font-semibold text-slate-700 tabular-nums">{row.total > 0 ? yen(row.total) : '—'}</td>
-                    <td className="py-2 text-right text-slate-500 tabular-nums">{row.count > 0 ? `${row.count.toLocaleString()}件` : '—'}</td>
-                    <td className="py-2 text-right text-slate-500 tabular-nums">{row.avg > 0 ? yen(row.avg) : '—'}</td>
+                    <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{row.total > 0 ? yen(row.total) : '—'}</td>
+                    <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{row.count > 0 ? `${row.count.toLocaleString()}件` : '—'}</td>
+                    <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{row.avg > 0 ? yen(row.avg) : '—'}</td>
                     <td className="py-2 text-right hidden md:table-cell">
                       <div className="flex items-center justify-end gap-2">
-                        <div className="w-16 bg-slate-100 rounded-full h-1.5">
+                        <div className="w-16 bg-gray-100 dark:bg-gray-800 rounded-full h-1.5">
                           <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
                         </div>
                         <span className="text-xs text-slate-400 tabular-nums w-8">{pct.toFixed(0)}%</span>
@@ -938,11 +938,11 @@ export default function SalesClient({
                   const yoy  = row.prevTotal > 0 ? ((row.total - row.prevTotal) / row.prevTotal) * 100 : null
                   const diff = row.total - row.prevTotal
                   return (
-                    <tr key={row.month} className="border-b border-slate-50 hover:bg-slate-50">
+                    <tr key={row.month} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
                       <td className="py-2 text-slate-600 text-sm">
                         {new Date(row.month + '-01T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
                       </td>
-                      <td className="py-2 text-right font-semibold text-slate-700 tabular-nums">{yen(row.total)}</td>
+                      <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{yen(row.total)}</td>
                       <td className="py-2 text-right text-slate-400 tabular-nums">{row.prevTotal > 0 ? yen(row.prevTotal) : '—'}</td>
                       <td className="py-2 text-right">
                         {yoy != null ? <span className={`text-xs font-semibold ${yoy >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pctStr(yoy)}</span> : <span className="text-slate-300 text-xs">—</span>}
@@ -971,10 +971,10 @@ export default function SalesClient({
               return (
                 <div key={p.name} className="flex items-center gap-3 group">
                   <span className="text-xs text-slate-600 w-28 shrink-0 truncate">{p.name}</span>
-                  <div className="flex-1 bg-slate-100 rounded-full h-3.5 overflow-hidden">
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-3.5 overflow-hidden">
                     <div className="h-full bg-emerald-400 group-hover:bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                   </div>
-                  <span className="text-xs font-semibold text-slate-700 w-24 text-right shrink-0 tabular-nums">{yen(p.amount)}</span>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-24 text-right shrink-0 tabular-nums">{yen(p.amount)}</span>
                   <span className="text-xs text-slate-400 w-10 text-right shrink-0">{pct.toFixed(0)}%</span>
                 </div>
               )

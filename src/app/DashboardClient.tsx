@@ -154,7 +154,7 @@ export default function DashboardClient({
             {storeOptions.map(s => (
               <button key={s.id} onClick={() => nav({ a: s.id })} disabled={isPending}
                 className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                  currentA === s.id ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  currentA === s.id ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'bg-gray-100 dark:bg-gray-800 text-slate-600 hover:bg-slate-200'
                 }`}>
                 {s.label}
               </button>
@@ -164,12 +164,12 @@ export default function DashboardClient({
         <div className="flex items-center gap-2 mt-5 flex-wrap">
           <select value={selectedYear} onChange={e => nav({ y: e.target.value, m: String(selectedMonth) })}
             disabled={isPending}
-            className="text-sm bg-white border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400">
+            className="text-sm bg-white border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400">
             {availableYears.map(y => <option key={y} value={y}>{y}年</option>)}
           </select>
           <select value={selectedMonth} onChange={e => nav({ m: e.target.value })}
             disabled={isPending}
-            className="text-sm bg-white border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400">
+            className="text-sm bg-white border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400">
             {MONTHS.map((label, i) => <option key={i + 1} value={i + 1}>{label}</option>)}
           </select>
           {isPending && (
@@ -271,7 +271,7 @@ export default function DashboardClient({
                     <div>会計数: {Number(m.checkout_count).toLocaleString()}件</div>
                     <div>客単価: {yen(avg)}</div>
                   </div>
-                  <span className="text-slate-500 tabular-nums" style={{ fontSize: '8px' }}>
+                  <span className="text-gray-500 dark:text-gray-400 tabular-nums" style={{ fontSize: '8px' }}>
                     {Number(m.total) >= 1000000 ? `${(Number(m.total) / 10000).toFixed(0)}万` : Number(m.total) > 0 ? `${Math.round(Number(m.total) / 1000)}千` : ''}
                   </span>
                   <div className="w-full flex items-end" style={{ height: '120px' }}>
@@ -307,18 +307,18 @@ export default function DashboardClient({
                   const avg  = Number(row.checkout_count) > 0
                     ? Math.round(Number(row.total) / Number(row.checkout_count)) : 0
                   return (
-                    <tr key={String(row.sale_month)} className="border-b border-slate-50 hover:bg-slate-50">
+                    <tr key={String(row.sale_month)} className="border-b border-slate-50 hover:bg-gray-50 dark:bg-gray-800">
                       <td className="py-2 text-slate-600 text-sm">
                         {new Date(String(row.sale_month) + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
                       </td>
-                      <td className="py-2 text-right font-semibold text-slate-700 tabular-nums">{yen(Number(row.total))}</td>
+                      <td className="py-2 text-right font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{yen(Number(row.total))}</td>
                       <td className="py-2 text-right">
                         {mom != null
                           ? <span className={`text-xs font-semibold ${mom >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{mom >= 0 ? '+' : ''}{mom.toFixed(1)}%</span>
                           : <span className="text-slate-300 text-xs">—</span>}
                       </td>
-                      <td className="py-2 text-right text-slate-500 tabular-nums">{Number(row.checkout_count).toLocaleString()}</td>
-                      <td className="py-2 text-right text-slate-500 tabular-nums">{yen(avg)}</td>
+                      <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{Number(row.checkout_count).toLocaleString()}</td>
+                      <td className="py-2 text-right text-gray-500 dark:text-gray-400 tabular-nums">{yen(avg)}</td>
                       <td className="py-2 text-right text-red-400 tabular-nums hidden sm:table-cell">{yen(Number(row.discount_amount ?? 0))}</td>
                     </tr>
                   )
@@ -358,15 +358,15 @@ export default function DashboardClient({
                   <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${i < 3 ? rankColors[i] : 'bg-slate-200 text-slate-500'}`}>
                     {i + 1}
                   </span>
-                  <span className="text-sm text-slate-700 flex-1 truncate">{item.name || '（名称不明）'}</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 flex-1 truncate">{item.name || '（名称不明）'}</span>
                   <span className="text-xs text-slate-400 hidden sm:block w-24 truncate text-right">{item.category || '—'}</span>
                   <div className="flex items-center gap-2 shrink-0">
-                    <div className="w-16 bg-slate-100 rounded-full h-1.5">
+                    <div className="w-16 bg-gray-100 dark:bg-gray-800 rounded-full h-1.5">
                       <div className="h-full bg-blue-400 rounded-full" style={{ width: `${Math.min(share, 100)}%` }} />
                     </div>
                     <span className="text-xs text-slate-400 w-10 text-right tabular-nums">{share.toFixed(1)}%</span>
                   </div>
-                  <span className="text-sm font-semibold text-slate-700 w-24 text-right shrink-0 tabular-nums">{yen(item.revenue)}</span>
+                  <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 w-24 text-right shrink-0 tabular-nums">{yen(item.revenue)}</span>
                 </div>
               )
             })}
@@ -385,10 +385,10 @@ export default function DashboardClient({
               {dowData.map(d => (
                 <div key={d.dow} className="flex items-center gap-2 group" title={`${d.label}曜日: ${yen(d.total)} / ${d.count}件`}>
                   <span className={`text-sm font-bold w-5 shrink-0 ${DOW_COLORS[d.dow]}`}>{d.label}</span>
-                  <div className="flex-1 bg-slate-100 rounded-full h-3.5 overflow-hidden">
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-3.5 overflow-hidden">
                     <div className="h-full bg-blue-400 group-hover:bg-blue-500 rounded-full transition-all" style={{ width: `${(d.total / maxDow) * 100}%` }} />
                   </div>
-                  <span className="text-xs font-semibold text-slate-700 w-24 text-right shrink-0 tabular-nums">{yen(d.total)}</span>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-24 text-right shrink-0 tabular-nums">{yen(d.total)}</span>
                   <span className="text-xs text-slate-400 w-10 text-right shrink-0">{d.count}件</span>
                 </div>
               ))}
@@ -435,10 +435,10 @@ export default function DashboardClient({
               return (
                 <div key={p.name} className="flex items-center gap-3 group">
                   <span className="text-xs text-slate-600 w-32 shrink-0 truncate">{p.name}</span>
-                  <div className="flex-1 bg-slate-100 rounded-full h-3 overflow-hidden">
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded-full h-3 overflow-hidden">
                     <div className="h-full bg-emerald-400 group-hover:bg-emerald-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                   </div>
-                  <span className="text-xs font-semibold text-slate-700 w-24 text-right shrink-0 tabular-nums">{yen(p.amount)}</span>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-24 text-right shrink-0 tabular-nums">{yen(p.amount)}</span>
                   <span className="text-xs text-slate-400 w-10 text-right shrink-0">{pct.toFixed(0)}%</span>
                 </div>
               )
