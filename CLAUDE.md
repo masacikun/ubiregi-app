@@ -42,6 +42,5 @@ cd /var/www/ubiregi-app && npm ci && npm run build && pm2 restart ubiregi-app
 ```
 
 ## 作業ディレクトリ
-- 作業開始時に必ずpwdで現在のパスを確認すること
-- Googleドライブの共有ドライブ内のsmile-mgmtフォルダで作業すること
-- MacによってユーザーIDが異なる場合があるが、pwdで自動判断すること
+- VSCode Remote SSHで`smileadmin@smile-mgmt.xvps.jp`に接続して作業すること
+- ローカルのsmile-mgmtリポジトリ(https://github.com/masacikun/smile-mgmt)でドキュメント管理すること
