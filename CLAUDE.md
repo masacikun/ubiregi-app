@@ -8,7 +8,7 @@ VPS: `/var/www/ubiregi-app` (PM2: `ubiregi-app`, port 3001, basePath: `/u`)
 ## 作業完了後に必ず実行すること
 
 1. **README.md を更新する** — 変更内容に合わせてこのリポジトリの README.md を修正する
-2. **VPS の SYSTEM.md を更新する** — `ssh smileadmin@smile-mgmt.xvps.jp` で `/var/www/SYSTEM.md` を編集し、変更内容を更新履歴に追記する
+2. **VPS の SYSTEM.md を更新する** — `ssh smileadmin@smile-mgmt.xvps.jp` で `/var/www/smile-mgmt/SYSTEM.md` を編集し、変更内容を更新履歴に追記する
 3. **GitHub に push する** — main ブランチに push して GitHub Actions で VPS へデプロイする
 
 ## 作業ルール
@@ -42,5 +42,6 @@ cd /var/www/ubiregi-app && npm ci && npm run build && pm2 restart ubiregi-app
 ```
 
 ## 作業ディレクトリ
-- VSCode Remote SSHで`smileadmin@smile-mgmt.xvps.jp`に接続して作業すること
-- ローカルのsmile-mgmtリポジトリ(https://github.com/masacikun/smile-mgmt)でドキュメント管理すること
+- 作業開始時に必ずpwdで現在のパスを確認すること
+- Googleドライブの共有ドライブ内のsmile-mgmtフォルダで作業すること
+- MacによってユーザーIDが異なる場合があるが、pwdで自動判断すること
