@@ -33,7 +33,17 @@ jobs:
           script: |
             set -e
             cd /var/www/ubiregi-app
+            if [ -d .next ]; then
+              rm -rf .next.bak
+              cp -r .next .next.bak
+            fi
             npm ci
-            npm run build
+            if ! npm run build; then
+              echo "[BUILD FAILED] rolling back .next"
+              rm -rf .next
+              [ -d .next.bak ] && mv .next.bak .next
+              exit 1
+            fi
+            rm -rf .next.bak
             pm2 restart ubiregi-app --max-memory-restart 300M || pm2 start npm --name ubiregi-app --max-memory-restart 300M -- start
             echo "✓ ubiregi-app deployed"
