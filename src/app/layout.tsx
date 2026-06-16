@@ -8,7 +8,10 @@ import './globals.css'
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 
 export const metadata: Metadata = {
-  title: '番頭さん｜ユビレジ分析',
+  title: {
+    default: '番頭さん｜ユビレジ分析',
+    template: '番頭さん｜ユビレジ分析｜%s',
+  },
   description: 'ユビレジ POSデータ 売上・商品分析ダッシュボード',
 }
 
