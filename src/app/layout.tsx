@@ -8,7 +8,7 @@ import './globals.css'
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 
 export const metadata: Metadata = {
-  title: 'ユビレジ分析',
+  title: '番頭さん｜ユビレジ分析',
   description: 'ユビレジ POSデータ 売上・商品分析ダッシュボード',
 }
 

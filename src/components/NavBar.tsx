@@ -53,8 +53,9 @@ export default function NavBar() {
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-400 animate-pulse z-50" />
       )}
       <div className="w-full px-4 flex items-center justify-between h-14">
-        <Link href={makeHref('/')} className="font-bold text-base tracking-wide text-white hover:text-slate-200 transition-colors">
-          ユビレジ分析
+        <Link href={makeHref('/')} className="flex items-center gap-2 font-bold text-base tracking-wide text-white hover:text-slate-200 transition-colors">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/u/logo.svg" alt="番頭さん" className="w-6 h-6 rounded-full" />ユビレジ分析
         </Link>
         <div className="flex items-center gap-3">
           {!isDashboard && (
