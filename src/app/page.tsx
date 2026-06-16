@@ -1,4 +1,4 @@
-export const metadata = { title: 'ダッシュボード' }
+export const metadata = { title: '番頭さん｜ユビレジ分析｜ダッシュボード' }
 export const dynamic = 'force-dynamic'
 import { supabaseServer as supabase } from '@/lib/supabase-server'
 import { DEFAULT_ACCOUNT_ID } from '@/lib/stores'
