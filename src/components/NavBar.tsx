@@ -11,6 +11,7 @@ const EXTERNAL_LINKS = [
   { href: '/',            label: '予実管理' },
   { href: '/m/dashboard', label: 'MF会計'  },
   { href: '/a',            label: '分析'     },
+  { href: '/master',       label: '店舗マスタ' },
 ]
 
 const links = [
