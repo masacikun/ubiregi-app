@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { STORES, ALL_LABEL, DEFAULT_ACCOUNT_ID } from '@/lib/stores'
 
 const EXTERNAL_LINKS = [
+  { href: 'https://smile-mgmt.xvps.jp/card', label: '名刺' },
   { href: '/n',           label: '電話履歴' },
   { href: '/',            label: '予実管理' },
   { href: '/m/dashboard', label: 'MF会計'  },
