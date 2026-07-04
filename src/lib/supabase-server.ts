@@ -1,8 +1,2 @@
-import { createClient } from '@supabase/supabase-js'
-
-// Server Component専用クライアント（service role key でRLS/タイムアウト回避）
-// SUPABASE_SERVICE_ROLE_KEY はNEXT_PUBLIC_不要 = サーバー側のみで利用可能
-export const supabaseServer = createClient(
-  (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL)!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// 共通化: 正本 supabase-admin.ts(supabaseAdmin) を supabaseServer 名で再輸出（互換維持）
+export { supabaseAdmin as supabaseServer } from "./supabase-admin"
