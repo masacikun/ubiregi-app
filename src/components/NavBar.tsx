@@ -9,7 +9,7 @@ const EXTERNAL_LINKS = [
   { href: 'https://smile-mgmt.xvps.jp/card', label: '名刺' },
   { href: 'https://smile-mgmt.xvps.jp/n',           label: '電話履歴' },
   { href: 'https://smile-mgmt.xvps.jp/',            label: '予実管理' },
-  { href: 'https://smile-mgmt.xvps.jp/m/dashboard', label: 'MF会計'  },
+  { href: 'https://smile-mgmt.xvps.jp/m', label: 'MF会計'  },
   { href: 'https://smile-mgmt.xvps.jp/a',            label: '分析'     },
   { href: 'https://smile-mgmt.xvps.jp/master',       label: '店舗マスタ' },
   { href: 'https://smile-mgmt.xvps.jp/sq', label: 'Square' },
