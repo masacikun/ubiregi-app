@@ -6,14 +6,14 @@ import { useState, useEffect } from 'react'
 import { STORES, ALL_LABEL, DEFAULT_ACCOUNT_ID } from '@/lib/stores'
 
 const EXTERNAL_LINKS = [
-  { href: 'https://smile-mgmt.xvps.jp/card', label: '名刺' },
-  { href: 'https://smile-mgmt.xvps.jp/n',           label: '電話履歴' },
-  { href: 'https://smile-mgmt.xvps.jp/',            label: '予実管理' },
-  { href: 'https://smile-mgmt.xvps.jp/m', label: 'MF会計'  },
-  { href: 'https://smile-mgmt.xvps.jp/a',            label: '分析'     },
-  { href: 'https://smile-mgmt.xvps.jp/master',       label: '店舗マスタ' },
-  { href: 'https://smile-mgmt.xvps.jp/sq', label: 'Square' },
-  { href: 'https://smile-mgmt.xvps.jp/car', label: '車' },
+  { href: 'https://banto.hakata-yamato.co.jp/card', label: '名刺' },
+  { href: 'https://banto.hakata-yamato.co.jp/n',           label: '電話履歴' },
+  { href: 'https://banto.hakata-yamato.co.jp/',            label: '予実管理' },
+  { href: 'https://banto.hakata-yamato.co.jp/m', label: 'MF会計'  },
+  { href: 'https://banto.hakata-yamato.co.jp/a',            label: '分析'     },
+  { href: 'https://banto.hakata-yamato.co.jp/master',       label: '店舗マスタ' },
+  { href: 'https://banto.hakata-yamato.co.jp/sq', label: 'Square' },
+  { href: 'https://banto.hakata-yamato.co.jp/car', label: '車' },
 ]
 
 const links = [
