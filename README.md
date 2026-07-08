@@ -101,7 +101,7 @@ python sync_ubiregi.py --since 2024-06-01 --until 2024-06-30
 
 ### 日次仕訳ドラフト生成（フェーズ2・2026-07-09）
 
-ドラフト3テーブル: ubiregi_journal_drafts（日次×店ヘッダ・UNIQUE(business_date,account_id)・send_status='sent'は再生成から保護）／ubiregi_journal_draft_lines（借方=売上高税抜×税率・貸方=決済税込）／ubiregi_journal_review_items（複数決済等の人手対応退避）。
+ドラフト3テーブル: ubiregi_journal_drafts（日次×店ヘッダ・UNIQUE(business_date,account_id)・send_status='sent'は再生成から保護）／ubiregi_journal_draft_lines（**借方=現金/売掛金・税込・取引先付き／貸方=売上高・税抜×税率**。2026-07-09向き修正）／ubiregi_journal_review_items（複数決済等の人手対応退避）。
 
 実行（手動・cron化しない＝人が確認する運用）:
 ```bash
@@ -112,8 +112,8 @@ node scripts/generate_journal_drafts.mjs --from 2026-07-01 --to 2026-07-31
 
 生成仕様の要点:
 - 対象=closed・paid_at>=2026-06-01（6/1足切り）。営業日=JST暦日（businessDate()に分離・将来変更可）。
-- 借方は明細subtotalを税抜化して集計（**intax明細のsubtotalは税込**のため /(1+rate)。丸め残差は最大借方行で端数調整しmemo明記）→ 日次借方合計=checkouts.subtotal合計に厳密一致。
-- 貸方は必ずcheckouts.total起点（payments.amountの生値は使わない＝現金預かり金対策）。複数決済・未知決済はreview_itemsへ退避し貸方に自動計上しない。
+- **貸方（売上高）**は明細subtotalを税抜化して集計（**intax明細のsubtotalは税込**のため /(1+rate)。丸め残差は最大貸方行で端数調整しmemo明記）→ 日次貸方合計=checkouts.subtotal合計に厳密一致。
+- **借方（現金/売掛金）**は必ずcheckouts.total起点（payments.amountの生値は使わない＝現金預かり金対策）。売掛系のみ取引先（payment_map.trade_partner_name→MF取引先code）。複数決済・未知決済はreview_itemsへ退避し借方に自動計上しない。
 - 要確認フラグ: menu_item_review_flags該当（その他料金等）／needs_reviewカテゴリ／複数決済／未知カテゴリ・未知決済／ネットマイナス。
 - 部門はunit_pos_mappings→units.codeで解決（201=中洲19023・202=西新42765）。
 - MF送信（journal.write）・UIは次フェーズ。

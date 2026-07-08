@@ -2,8 +2,9 @@
 // 使い方: node scripts/generate_journal_drafts.mjs [--from YYYY-MM-DD] [--to YYYY-MM-DD]
 //   デフォルト: 2026-06-01 〜 今日(JST)。6/1足切り＝HYD開始日より前は生成しない。
 // 冪等: 同(business_date, account_id)は作り直し。ただし send_status='sent' は保護（スキップ）。
-// 金額規約: 借方(debit)=売上高・税抜(明細subtotalネット) / 貸方(credit)=決済・税込(checkouts.total起点)。
-//           貸方に payments.amount の生値は使わない（現金は預かり金のため）。
+// 金額規約（2026-07-09 向き修正）: 借方(debit)=現金/売掛金・税込(checkouts.total起点・部門/取引先付き)
+//           / 貸方(credit)=売上高・税抜(明細subtotalネット・部門付き)。
+//           借方に payments.amount の生値は使わない（現金は預かり金のため）。
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -112,8 +113,8 @@ async function main() {
     const dept = deptByAccount.get(accountId)
     if (!dept) throw new Error(`部門未解決: account_id=${accountId}（unit_pos_mappingsに行がありません）`)
 
-    const debitAgg = new Map()   // `${class}|${rate}` -> sum(subtotal 税抜)
-    const creditAgg = new Map()  // `${acct}|${sub}` -> sum(checkouts.total 税込)
+    const salesAgg = new Map()   // `${class}|${rate}` -> sum(税抜) → 貸方=売上高
+    const payAgg = new Map()     // `${acct}|${sub}|${partner}` -> sum(checkouts.total 税込) → 借方=現金/売掛金
     const reasons = new Set()
     const reviewItems = []
     let taxSum = 0
@@ -143,10 +144,10 @@ async function main() {
           console.log(`  [税率フォールバック→10%] ${bdate} co=${co.id} ${it.menu_item_name} tax_rate=${it.tax_rate}`)
           rate = 0.1
         }
-        // 借方は税抜で計上する。intax（内税）明細の subtotal は税込のため税抜化する
+        // 売上（貸方）は税抜で計上する。intax（内税）明細の subtotal は税込のため税抜化する
         const net = it.tax_type === 'intax' ? Number(it.subtotal) / (1 + rate) : Number(it.subtotal)
         const k = `${cls}|${rate}`
-        debitAgg.set(k, (debitAgg.get(k) ?? 0) + net)
+        salesAgg.set(k, (salesAgg.get(k) ?? 0) + net)
       }
 
       const pays = paysByCo.get(co.id) ?? []
@@ -158,8 +159,8 @@ async function main() {
           report.unknown.add(`決済:${p.payment_type_name}`)
           reviewItems.push({ checkout_id: co.id, reason: `未知決済:${p.payment_type_name}`, detail: { total: Number(co.total), payments: pays.map(x => ({ name: x.payment_type_name, amount: Number(x.amount) })) } })
         } else {
-          const k = `${pm.credit_account_name}|${pm.credit_sub_account_name ?? ''}`
-          creditAgg.set(k, (creditAgg.get(k) ?? 0) + Number(co.total)) // 必ずcheckouts.total起点
+          const k = `${pm.credit_account_name}|${pm.credit_sub_account_name ?? ''}|${pm.trade_partner_name ?? ''}`
+          payAgg.set(k, (payAgg.get(k) ?? 0) + Number(co.total)) // 必ずcheckouts.total起点（借方=入金）
         }
       } else if (pays.length > 1) {
         reasons.add('複数決済（貸方手動対応）')
@@ -170,36 +171,36 @@ async function main() {
       }
     }
 
-    // 行の組み立て（ネット計上・ゼロ行は出さない・ネットマイナスは要確認）
+    // 行の組み立て（借方=現金/売掛金・税込／貸方=売上高・税抜。ゼロ行は出さない・ネットマイナスは要確認）
     const lines = []
     let sort = 1
-    for (const cls of ['food', 'drink', 'other']) {
-      for (const rate of [0.1, 0.08]) {
-        const v = Math.round(debitAgg.get(`${cls}|${rate}`) ?? 0)
-        if (v === 0) continue
-        if (v < 0) reasons.add(`ネットマイナス:${CLASS_JA[cls]}`)
-        lines.push({ side: 'debit', account_name: '売上高', sub_account_name: CLASS_JA[cls], tax_rate: rate, amount: v, sort_order: sort++ })
-      }
-    }
-    for (const [k, v0] of [...creditAgg.entries()].sort()) {
+    for (const [k, v0] of [...payAgg.entries()].sort()) {
       const v = Math.round(v0)
       if (v === 0) continue
-      const [acct, sub] = k.split('|')
-      lines.push({ side: 'credit', account_name: acct, sub_account_name: sub || null, tax_rate: null, amount: v, sort_order: sort++ })
+      const [acct, sub, partner] = k.split('|')
+      lines.push({ side: 'debit', account_name: acct, sub_account_name: sub || null, trade_partner_name: partner || null, tax_rate: null, amount: v, sort_order: sort++ })
     }
-    // 端数調整: 借方合計は checkouts.subtotal（税抜・正）の日次合計に厳密一致させる。
-    // intax税抜化の丸め残差（数円）を最大借方行に吸収（会計慣行の端数調整・memoに明記）
-    const debitTarget = Math.round(day.checkouts.reduce((s, co) => s + Number(co.subtotal), 0))
-    const debitLines = lines.filter(l => l.side === 'debit')
-    let residual = debitTarget - debitLines.reduce((s, l) => s + l.amount, 0)
-    if (residual !== 0 && debitLines.length) {
-      const biggest = debitLines.reduce((a, b) => (Math.abs(b.amount) > Math.abs(a.amount) ? b : a))
+    for (const cls of ['food', 'drink', 'other']) {
+      for (const rate of [0.1, 0.08]) {
+        const v = Math.round(salesAgg.get(`${cls}|${rate}`) ?? 0)
+        if (v === 0) continue
+        if (v < 0) reasons.add(`ネットマイナス:${CLASS_JA[cls]}`)
+        lines.push({ side: 'credit', account_name: '売上高', sub_account_name: CLASS_JA[cls], tax_rate: rate, amount: v, sort_order: sort++ })
+      }
+    }
+    // 端数調整: 貸方（売上・税抜）合計は checkouts.subtotal（正）の日次合計に厳密一致させる。
+    // intax税抜化の丸め残差（数円）を最大貸方行に吸収（会計慣行の端数調整・memoに明記）
+    const creditTarget = Math.round(day.checkouts.reduce((s, co) => s + Number(co.subtotal), 0))
+    const creditLines = lines.filter(l => l.side === 'credit')
+    let residual = creditTarget - creditLines.reduce((s, l) => s + l.amount, 0)
+    if (residual !== 0 && creditLines.length) {
+      const biggest = creditLines.reduce((a, b) => (Math.abs(b.amount) > Math.abs(a.amount) ? b : a))
       biggest.amount += residual
       biggest.memo = `端数調整 ${residual > 0 ? '+' : ''}${residual}円含む（内税税抜化の丸め）`
       report.residualDays = (report.residualDays ?? 0) + 1
     }
-    const totalDebit = debitLines.reduce((s, l) => s + l.amount, 0)
-    const totalCredit = lines.filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+    const totalDebit = lines.filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
+    const totalCredit = creditLines.reduce((s, l) => s + l.amount, 0)
     const taxAmount = Math.round(taxSum)
 
     // 保存（sentは保護・それ以外は作り直し）
@@ -237,10 +238,10 @@ async function main() {
       report.reviewDays++
       for (const r of reasons) report.reasonCount[r.split(':')[0]] = (report.reasonCount[r.split(':')[0]] ?? 0) + 1
     }
-    // 貸借検算: 複数決済/未知決済が無い日は 借方+税=貸方 が1円まで一致するはず
-    const hasCreditGap = [...reasons].some(r => r.startsWith('複数決済') || r.startsWith('未知決済') || r.startsWith('決済レコード無し'))
-    if (!hasCreditGap && totalDebit + taxAmount !== totalCredit) {
-      report.balanceNg.push({ bdate, dept, totalDebit, taxAmount, totalCredit, diff: totalDebit + taxAmount - totalCredit })
+    // 貸借検算: 複数決済/未知決済が無い日は 借方(税込)=貸方(税抜)+税 が1円まで一致するはず
+    const hasDebitGap = [...reasons].some(r => r.startsWith('複数決済') || r.startsWith('未知決済') || r.startsWith('決済レコード無し'))
+    if (!hasDebitGap && totalDebit !== totalCredit + taxAmount) {
+      report.balanceNg.push({ bdate, dept, totalDebit, taxAmount, totalCredit, diff: totalDebit - totalCredit - taxAmount })
     }
   }
 
