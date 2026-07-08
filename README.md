@@ -139,3 +139,13 @@ node scripts/generate_journal_drafts.mjs --from 2026-07-01 --to 2026-07-31
 - 送信: src/app/mf-send/actions.ts が **mf-accounting-sync/scripts/ubiregi_journal_send.mjs をexecFileで呼ぶ**（3-A確定ロジックの完全再利用・重複実装なし）。二重送信ガード（条件付きロック＋remark1行目一致＋sent保護＋6/1足切り）はCLI側で担保、UI側でも事前バリデーション。
 - 要確認13日はボタン非表示（4-2で対応）。原本・ドラフトの編集機能は無し（閲覧＋送信のみ）。
 - スクリプト置き場は env MF_SEND_APP_DIR で変更可（既定 /var/www/mf-accounting-sync）。
+
+
+## 要確認日の画面対応（フェーズ4-2-2・2026-07-09）
+
+/u/mf-send のプレビュー内で要確認日を確定できる：
+
+- **複数決済の半自動確定**: review_itemsに退避した会計ごとに決済内訳を表示し、payment_mapから借方（科目/補助/取引先）を自動提案。現金は**checkouts.total−他決済の逆算**（payments.amountの預かり金は使わない）。配分合計=会計合計・マイナス無し・借方先選択済みのときのみ確定可。確定でdraft_linesに借方行追加（memoにco=会計ID）・review_items.resolved=true。
+- **イレギュラー補正（7/2型）**: 「要確認商品」フラグのある日限定。売上高の補助間振替（例: その他→フード/ドリンク・税込指定・税10%固定・税抜変換はΣ保存の端数調整）。理由必須・元値と理由は ubiregi_journal_draft_overrides に監査記録（原本checkouts/itemsは不変更）。カレンダーセルに「補」マーク＋プレビューに補正記録を表示。
+- 未確定ゼロ＋貸借一致（借方税込=貸方税抜+税）になると review_required=false → クリーン日と同じ送信フローで送信可能。
+- 注意: 生成スクリプト再実行は未送信ドラフトを作り直すため**手動確定・補正は消える**（確定→早めに送信の運用。生成ボタン実装時に保護予定）。
