@@ -29,11 +29,12 @@ const sb = createClient(SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   realtime: { transport: class DummyWs {} },
 })
 
-// 営業日定義（現状=JST暦日。深夜跨ぎ運用に変える場合はこの関数だけ変更する）
+// 営業日定義（2026-07-09切替: 深夜5時カットオフ＝JST 05:00までの会計は前日の営業日に計上。まさし決定）
+// 例: 7/3 00:59 の会計 → 営業日 7/2。EPARK等の営業日ベース照合と一致させる。
 function businessDate(paidAt) {
-  return new Date(new Date(paidAt).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+  return new Date(new Date(paidAt).getTime() + (9 - 5) * 3600 * 1000).toISOString().slice(0, 10)
 }
-function jstStartUtc(dateStr) { return `${dateStr}T00:00:00+09:00` }
+function jstStartUtc(dateStr) { return `${dateStr}T05:00:00+09:00` } // 営業日Dの開始=D 05:00 JST
 function todayJst() { return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10) }
 
 async function fetchAll(build) {
