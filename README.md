@@ -63,17 +63,25 @@ NEXT_PUBLIC_UBIREGI_APP_URL=http://localhost:3001
 ## 増分同期（定期実行）
 
 ```bash
-# 手動で増分同期
+# 手動で増分同期（デフォルト店＝UBIREGI_API_TOKEN の店舗のみ）
 python sync_ubiregi.py
+
+# 全店舗一括（.env.local の UBIREGI_STORE_N_TOKEN / _ACCOUNT_ID を全て対象）
+python sync_ubiregi.py --all-stores
 
 # 特定期間の再同期
 python sync_ubiregi.py --since 2024-06-01 --until 2024-06-30
 ```
 
-cron で定期実行する場合：
+本番cron（毎日3:00・全店舗）。ログは /var/log 直下ではなく**アプリ配下 logs/**（smileadmin所有・
+/var/log は smileadmin が新規作成不可でリダイレクト失敗→同期停止の障害が起きたため。2026-07-08根治）：
 ```cron
-0 * * * * cd /path/to/ubiregi-app && python sync_ubiregi.py
+0 3 * * * cd /var/www/ubiregi-app && /var/www/ubiregi-app/venv/bin/python3 sync_ubiregi.py --all-stores >> /var/www/ubiregi-app/logs/ubiregi-sync.log 2>&1
 ```
+- rotate は /etc/logrotate.d/bantosan-apps（weekly・8世代・copytruncate）
+- DB接続は SUPABASE_URL（内部PostgREST 127.0.0.1:3101）優先。公開URLはauth_request保護のためスクリプトからは不可
+- 店舗ごとに sync_logs の最終success−10分から増分。新店（前回同期なし）は自動フル同期
+- 1店舗のエラー（トークン失効等）は sync_logs に記録して次店舗へ継続
 
 ---
 

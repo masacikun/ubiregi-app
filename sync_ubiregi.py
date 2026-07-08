@@ -39,7 +39,8 @@ from dotenv import load_dotenv
 load_dotenv(".env.local")
 
 UBIREGI_BASE_URL = "https://ubiregi.com/api/3"
-SUPABASE_URL     = os.environ["NEXT_PUBLIC_SUPABASE_URL"]
+# サーバ側は内部PostgREST（SUPABASE_URL=127.0.0.1:3101）優先。公開URLは2026-07-04以降 auth_request 保護＋ドメイン移行でスクリプトから接続不可
+SUPABASE_URL     = os.environ.get("SUPABASE_URL") or os.environ["NEXT_PUBLIC_SUPABASE_URL"]
 SUPABASE_KEY     = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 
 import requests
@@ -356,10 +357,11 @@ def sync_store(token, acc_id, sync_type, since, until):
     print(f"{'='*50}")
     session = make_session(token)
 
-    item_map, payment_map = sync_masters(session, acc_id)
-
-    print(f"  会計データ同期中 (account_id={acc_id})...")
+    # マスタ同期もtry内に置く：1店舗の失敗(トークン失効・413等)をsync_logsに記録して次店舗へ進む
     try:
+        item_map, payment_map = sync_masters(session, acc_id)
+
+        print(f"  会計データ同期中 (account_id={acc_id})...")
         n = sync_checkouts(
             session, acc_id,
             since=since, until=until,
@@ -424,16 +426,20 @@ def main():
         token  = store["token"]
         acc_id = store["account_id"]
 
+        # 店舗ごとに都度決定（前店舗の since/sync_type を引き継ぐと新店のフル同期が欠落するため）
+        store_sync_type = sync_type
+        store_since     = since
         if sync_type == "incremental":
             last = get_last_sync(acc_id)
             if last:
-                since = last - timedelta(minutes=10)
-                print(f"\naccount_id={acc_id}: 増分同期（{since.strftime('%Y-%m-%d %H:%M')} 以降）")
+                store_since = last - timedelta(minutes=10)
+                print(f"\naccount_id={acc_id}: 増分同期（{store_since.strftime('%Y-%m-%d %H:%M')} 以降）")
             else:
                 print(f"\naccount_id={acc_id}: 前回同期なし → フル同期")
-                sync_type = "full"
+                store_sync_type = "full"
+                store_since     = None
 
-        total_all += sync_store(token, acc_id, sync_type, since, until)
+        total_all += sync_store(token, acc_id, store_sync_type, store_since, until)
 
     print(f"\n{'='*50}")
     print(f"全店舗完了: 合計 {total_all} 件")
