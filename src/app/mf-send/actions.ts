@@ -101,17 +101,33 @@ export async function resolveCheckoutAction(reviewItemId: number, allocations: A
   const sum = allocations.reduce((s, a) => s + a.amountIncl, 0)
   if (sum !== trueTotal) return { ok: false, message: `配分合計¥${sum.toLocaleString()}が会計合計¥${trueTotal.toLocaleString()}と一致しません` }
 
-  // 借方行を追加（金額0はスキップ・監査用に checkout_id をmemoへ）
+  // 借方行を追加（同一キー＝side+科目+補助+取引先+税率(null) の既存行があれば合算・無ければ追加。金額0はスキップ）
   const { data: maxRow } = await supabaseAdmin.from('ubiregi_journal_draft_lines')
     .select('sort_order').eq('draft_id', item.draft_id).order('sort_order', { ascending: false }).limit(1)
   let sort = (maxRow?.[0]?.sort_order ?? 0) + 1
-  const rows = allocations.filter(a => a.amountIncl > 0).map(a => ({
-    draft_id: item.draft_id, side: 'debit', account_name: a.account,
-    sub_account_name: a.sub, trade_partner_name: a.partner, tax_rate: null,
-    amount: a.amountIncl, sort_order: sort++, memo: `複数決済確定 co=${item.checkout_id}`,
-  }))
-  const { error: eIns } = await supabaseAdmin.from('ubiregi_journal_draft_lines').insert(rows)
-  if (eIns) return { ok: false, message: `行追加に失敗: ${eIns.message}` }
+  for (const a of allocations.filter(x => x.amountIncl > 0)) {
+    let q = supabaseAdmin.from('ubiregi_journal_draft_lines')
+      .select('id, amount, memo')
+      .eq('draft_id', item.draft_id).eq('side', 'debit').eq('account_name', a.account)
+      .is('tax_rate', null)
+    q = a.sub === null ? q.is('sub_account_name', null) : q.eq('sub_account_name', a.sub)
+    q = a.partner === null ? q.is('trade_partner_name', null) : q.eq('trade_partner_name', a.partner)
+    const { data: hit } = await q.limit(1)
+    const tag = `複数決済確定 co=${item.checkout_id}`
+    if (hit?.[0]) {
+      const { error: eUp } = await supabaseAdmin.from('ubiregi_journal_draft_lines')
+        .update({ amount: hit[0].amount + a.amountIncl, memo: hit[0].memo ? `${hit[0].memo} / ${tag}` : tag })
+        .eq('id', hit[0].id)
+      if (eUp) return { ok: false, message: `行合算に失敗: ${eUp.message}` }
+    } else {
+      const { error: eIns } = await supabaseAdmin.from('ubiregi_journal_draft_lines').insert({
+        draft_id: item.draft_id, side: 'debit', account_name: a.account,
+        sub_account_name: a.sub, trade_partner_name: a.partner, tax_rate: null,
+        amount: a.amountIncl, sort_order: sort++, memo: tag,
+      })
+      if (eIns) return { ok: false, message: `行追加に失敗: ${eIns.message}` }
+    }
+  }
   await supabaseAdmin.from('ubiregi_journal_review_items').update({ resolved: true }).eq('id', reviewItemId)
 
   const { balanced, unresolved } = await recomputeDraft(item.draft_id)
