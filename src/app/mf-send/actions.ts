@@ -23,7 +23,7 @@ export async function sendDraftAction(draftId: number): Promise<SendResult> {
     .eq('id', draftId)
     .single()
   if (error || !draft) return { ok: false, message: `ドラフトが見つかりません: ${error?.message ?? draftId}` }
-  if (draft.review_required) return { ok: false, message: '要確認の日は送信できません（4-2で対応予定）' }
+  if (draft.review_required) return { ok: false, message: '要確認の日は未確定です（複数決済の確定/補正を先に）' }
   if (draft.business_date < HYD_START) return { ok: false, message: '2026-06-01より前は送信対象外です' }
   if (draft.send_status === 'sent') return { ok: false, message: '送信済みです（再送不可）' }
 
@@ -41,5 +41,156 @@ export async function sendDraftAction(draftId: number): Promise<SendResult> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return { ok: false, message: `送信エラー: ${msg.slice(0, 300)}（send_status=errorで再送可能）` }
+  }
+}
+
+// ---- 4-2-2: 要確認日の確定処理（すべてドラフト側・ユビレジ原本非破壊） ----
+
+export type Allocation = {
+  account: string           // 借方科目（現金/売掛金）
+  sub: string | null        // 補助
+  partner: string | null    // 取引先（売掛系のみ）
+  amountIncl: number        // 税込
+}
+
+// 日次ドラフトの合計・要確認フラグを再計算（未解決itemsゼロ＋貸借一致で送信可へ）
+async function recomputeDraft(draftId: number): Promise<{ balanced: boolean; unresolved: number }> {
+  const [{ data: lines }, { data: items }, { data: draft }] = await Promise.all([
+    supabaseAdmin.from('ubiregi_journal_draft_lines').select('side, amount').eq('draft_id', draftId),
+    supabaseAdmin.from('ubiregi_journal_review_items').select('id, resolved').eq('draft_id', draftId),
+    supabaseAdmin.from('ubiregi_journal_drafts').select('consumption_tax_amount, review_reasons').eq('id', draftId).single(),
+  ])
+  const totalDebit = (lines ?? []).filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
+  const totalCredit = (lines ?? []).filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+  const unresolved = (items ?? []).filter(i => !i.resolved).length
+  const balanced = totalDebit === totalCredit + (draft?.consumption_tax_amount ?? 0)
+  const reviewRequired = !(unresolved === 0 && balanced)
+  await supabaseAdmin.from('ubiregi_journal_drafts')
+    .update({ total_debit: totalDebit, total_credit: totalCredit, review_required: reviewRequired })
+    .eq('id', draftId).neq('send_status', 'sent')
+  return { balanced, unresolved }
+}
+
+// A. 複数決済会計の確定：借方行（現金/売掛金・税込）を追加し review_item を解決
+export async function resolveCheckoutAction(reviewItemId: number, allocations: Allocation[]): Promise<SendResult> {
+  const { data: item, error } = await supabaseAdmin
+    .from('ubiregi_journal_review_items')
+    .select('id, draft_id, checkout_id, reason, detail, resolved')
+    .eq('id', reviewItemId).single()
+  if (error || !item) return { ok: false, message: `対象が見つかりません: ${error?.message ?? reviewItemId}` }
+  if (item.resolved) return { ok: false, message: 'この会計は確定済みです' }
+  if (item.reason !== '複数決済') return { ok: false, message: 'この項目は複数決済ではありません' }
+
+  const { data: draft } = await supabaseAdmin.from('ubiregi_journal_drafts')
+    .select('id, send_status').eq('id', item.draft_id).single()
+  if (!draft || draft.send_status === 'sent') return { ok: false, message: '送信済みの日は変更できません' }
+
+  // 金額の正はDBのcheckouts.total（detailのtotalと二重確認）
+  const { data: co } = await supabaseAdmin.from('ubiregi_checkouts')
+    .select('total, status').eq('id', item.checkout_id).single()
+  const trueTotal = Math.round(Number(co?.total ?? 0))
+  const detailTotal = Math.round(Number((item.detail as { total?: number })?.total ?? 0))
+  if (!co || co.status !== 'closed' || trueTotal !== detailTotal)
+    return { ok: false, message: `会計金額の整合が取れません（DB=${trueTotal} / 退避時=${detailTotal}）` }
+
+  if (!Array.isArray(allocations) || allocations.length === 0) return { ok: false, message: '配分がありません' }
+  for (const a of allocations) {
+    if (!a.account || !Number.isInteger(a.amountIncl)) return { ok: false, message: '配分の形式が不正です' }
+    if (a.amountIncl < 0) return { ok: false, message: `マイナス配分は確定できません（${a.account}/${a.sub ?? '-'}: ${a.amountIncl}）。打ち間違いの可能性があるため要確認のまま残してください` }
+  }
+  const sum = allocations.reduce((s, a) => s + a.amountIncl, 0)
+  if (sum !== trueTotal) return { ok: false, message: `配分合計¥${sum.toLocaleString()}が会計合計¥${trueTotal.toLocaleString()}と一致しません` }
+
+  // 借方行を追加（金額0はスキップ・監査用に checkout_id をmemoへ）
+  const { data: maxRow } = await supabaseAdmin.from('ubiregi_journal_draft_lines')
+    .select('sort_order').eq('draft_id', item.draft_id).order('sort_order', { ascending: false }).limit(1)
+  let sort = (maxRow?.[0]?.sort_order ?? 0) + 1
+  const rows = allocations.filter(a => a.amountIncl > 0).map(a => ({
+    draft_id: item.draft_id, side: 'debit', account_name: a.account,
+    sub_account_name: a.sub, trade_partner_name: a.partner, tax_rate: null,
+    amount: a.amountIncl, sort_order: sort++, memo: `複数決済確定 co=${item.checkout_id}`,
+  }))
+  const { error: eIns } = await supabaseAdmin.from('ubiregi_journal_draft_lines').insert(rows)
+  if (eIns) return { ok: false, message: `行追加に失敗: ${eIns.message}` }
+  await supabaseAdmin.from('ubiregi_journal_review_items').update({ resolved: true }).eq('id', reviewItemId)
+
+  const { balanced, unresolved } = await recomputeDraft(item.draft_id)
+  return {
+    ok: true,
+    message: unresolved === 0 && balanced
+      ? '確定しました。貸借一致＝この日は送信可能になりました'
+      : `確定しました（残り未確定${unresolved}件${balanced ? '' : '・貸借未一致'}）`,
+  }
+}
+
+// B. 7/2型の売上補正（イレギュラー専用・原本非破壊・理由必須・元値はoverridesに保持）
+export async function applySalesReclassAction(
+  draftId: number, fromSub: string, fromAmountIncl: number,
+  allocs: { sub: string; amountIncl: number }[], reason: string,
+): Promise<SendResult> {
+  if (!reason?.trim()) return { ok: false, message: '補正理由の入力は必須です' }
+  const { data: draft } = await supabaseAdmin.from('ubiregi_journal_drafts')
+    .select('id, send_status, review_required, review_reasons').eq('id', draftId).single()
+  if (!draft) return { ok: false, message: 'ドラフトが見つかりません' }
+  if (draft.send_status === 'sent') return { ok: false, message: '送信済みの日は補正できません' }
+  const isIrregular = (draft.review_reasons ?? []).some((r: string) => r.startsWith('要確認商品'))
+  if (!isIrregular) return { ok: false, message: '補正はイレギュラー日（要確認商品フラグのある日）専用です' }
+
+  const sumIncl = allocs.reduce((s, a) => s + a.amountIncl, 0)
+  if (sumIncl !== fromAmountIncl) return { ok: false, message: `振替先合計¥${sumIncl.toLocaleString()}が元金額¥${fromAmountIncl.toLocaleString()}と一致しません` }
+  if (allocs.some(a => a.amountIncl <= 0 || !a.sub)) return { ok: false, message: '振替先の形式が不正です' }
+
+  // 税抜変換（10%固定・Σ保存の端数調整＝最大行に寄せる）→ 税額・貸借を変えない
+  const RATE = 0.1
+  const fromEx = Math.round(fromAmountIncl / (1 + RATE))
+  const exAllocs = allocs.map(a => ({ ...a, amountEx: Math.round(a.amountIncl / (1 + RATE)) }))
+  const residual = fromEx - exAllocs.reduce((s, a) => s + a.amountEx, 0)
+  if (residual !== 0) exAllocs.reduce((m, a) => (a.amountEx > m.amountEx ? a : m)).amountEx += residual
+
+  // 元の貸方行（売上高/fromSub・10%）から減額
+  const { data: fromLines } = await supabaseAdmin.from('ubiregi_journal_draft_lines')
+    .select('id, amount').eq('draft_id', draftId).eq('side', 'credit')
+    .eq('account_name', '売上高').eq('sub_account_name', fromSub).eq('tax_rate', 0.1)
+  const fromLine = fromLines?.[0]
+  if (!fromLine || fromLine.amount < fromEx)
+    return { ok: false, message: `元の行（売上高/${fromSub}）の金額が不足しています（行=${fromLine?.amount ?? 'なし'} / 必要=${fromEx}）` }
+  const remain = fromLine.amount - fromEx
+  if (remain > 0) {
+    await supabaseAdmin.from('ubiregi_journal_draft_lines').update({ amount: remain, memo: `補正で税抜¥${fromEx.toLocaleString()}を振替済み` }).eq('id', fromLine.id)
+  } else {
+    await supabaseAdmin.from('ubiregi_journal_draft_lines').delete().eq('id', fromLine.id)
+  }
+  // 振替先へ加算（既存行にマージ・無ければ追加）
+  for (const a of exAllocs) {
+    const { data: ex } = await supabaseAdmin.from('ubiregi_journal_draft_lines')
+      .select('id, amount').eq('draft_id', draftId).eq('side', 'credit')
+      .eq('account_name', '売上高').eq('sub_account_name', a.sub).eq('tax_rate', 0.1)
+    if (ex?.[0]) {
+      await supabaseAdmin.from('ubiregi_journal_draft_lines').update({ amount: ex[0].amount + a.amountEx }).eq('id', ex[0].id)
+    } else {
+      const { data: maxRow } = await supabaseAdmin.from('ubiregi_journal_draft_lines')
+        .select('sort_order').eq('draft_id', draftId).order('sort_order', { ascending: false }).limit(1)
+      await supabaseAdmin.from('ubiregi_journal_draft_lines').insert({
+        draft_id: draftId, side: 'credit', account_name: '売上高', sub_account_name: a.sub,
+        tax_rate: 0.1, amount: a.amountEx, sort_order: (maxRow?.[0]?.sort_order ?? 0) + 1, memo: '補正で追加',
+      })
+    }
+  }
+  // 監査記録＋該当review_itemの解決
+  await supabaseAdmin.from('ubiregi_journal_draft_overrides').insert({
+    draft_id: draftId, kind: 'sales_reclass',
+    original: { side: 'credit', account: '売上高', sub: fromSub, amount_incl: fromAmountIncl, amount_ex: fromEx },
+    replacement: exAllocs.map(a => ({ sub: a.sub, amount_incl: a.amountIncl, amount_ex: a.amountEx })),
+    reason: reason.trim(),
+  })
+  await supabaseAdmin.from('ubiregi_journal_review_items')
+    .update({ resolved: true }).eq('draft_id', draftId).like('reason', '要確認商品%')
+
+  const { balanced, unresolved } = await recomputeDraft(draftId)
+  return {
+    ok: true,
+    message: unresolved === 0 && balanced
+      ? '補正を適用しました。貸借一致＝この日は送信可能になりました'
+      : `補正を適用しました（残り未確定${unresolved}件${balanced ? '' : '・貸借未一致'}）`,
   }
 }

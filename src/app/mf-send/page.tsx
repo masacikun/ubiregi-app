@@ -2,10 +2,10 @@ export const metadata = { title: 'MF送信' }
 export const dynamic = 'force-dynamic'
 
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import MfSendClient, { type DraftRow, type DraftLine } from './MfSendClient'
+import MfSendClient, { type DraftRow, type DraftLine, type ReviewItem, type PaymentMapRow, type OverrideRow } from './MfSendClient'
 
 async function getData() {
-  const [draftsRes, linesRes, storesRes, unitsRes] = await Promise.all([
+  const [draftsRes, linesRes, storesRes, unitsRes, itemsRes, pmRes, ovRes] = await Promise.all([
     supabaseAdmin
       .from('ubiregi_journal_drafts')
       .select('*')
@@ -17,11 +17,22 @@ async function getData() {
       .order('sort_order'),
     supabaseAdmin.from('stores').select('ubiregi_account_id, current_name'),
     supabaseAdmin.from('units').select('code, name'),
+    supabaseAdmin
+      .from('ubiregi_journal_review_items')
+      .select('id, draft_id, checkout_id, reason, detail, resolved')
+      .order('id'),
+    supabaseAdmin
+      .from('ubiregi_payment_map')
+      .select('account_id, payment_type_name, credit_account_name, credit_sub_account_name, trade_partner_name, is_deposit_amount')
+      .eq('is_active', true),
+    supabaseAdmin
+      .from('ubiregi_journal_draft_overrides')
+      .select('id, draft_id, kind, original, replacement, reason, created_at')
+      .order('id'),
   ])
-  if (draftsRes.error) throw new Error(draftsRes.error.message)
-  if (linesRes.error) throw new Error(linesRes.error.message)
-  if (storesRes.error) throw new Error(storesRes.error.message)
-  if (unitsRes.error) throw new Error(unitsRes.error.message)
+  for (const r of [draftsRes, linesRes, storesRes, unitsRes, itemsRes, pmRes, ovRes]) {
+    if (r.error) throw new Error(r.error.message)
+  }
 
   const storeNames = new Map<number, string>(
     (storesRes.data ?? [])
@@ -45,10 +56,17 @@ async function getData() {
     generated_at: d.generated_at,
   }))
   const deptNames = Object.fromEntries((unitsRes.data ?? []).map(u => [String(u.code), u.name as string]))
-  return { drafts, lines: (linesRes.data ?? []) as DraftLine[], deptNames }
+  return {
+    drafts,
+    lines: (linesRes.data ?? []) as DraftLine[],
+    deptNames,
+    reviewItems: (itemsRes.data ?? []) as ReviewItem[],
+    paymentMap: (pmRes.data ?? []) as PaymentMapRow[],
+    overrides: (ovRes.data ?? []) as OverrideRow[],
+  }
 }
 
 export default async function MfSendPage() {
-  const { drafts, lines, deptNames } = await getData()
-  return <MfSendClient drafts={drafts} lines={lines} deptNames={deptNames} />
+  const data = await getData()
+  return <MfSendClient {...data} />
 }
