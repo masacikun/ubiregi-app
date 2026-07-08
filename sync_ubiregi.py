@@ -295,14 +295,17 @@ def sync_checkouts(session, acc_id, since=None, until=None, item_map=None, payme
 
 
 def parse_db_dt(ts):
-    """DB返却タイムスタンプ用（Python 3.9 fromisoformat 制限回避: Z・5桁μs・+HH:MM）"""
+    """DB返却タイムスタンプ用（Z・5桁μs対応。オフセットは剥がさず保持し、UTCへ正規化して返す）"""
     import re
     if not ts:
         return None
     ts = re.sub(r'\.(\d+)', lambda m: '.' + (m.group(1) + '000000')[:6], ts)
-    ts = ts.rstrip('Z')
-    ts = re.sub(r'[+-]\d{2}:\d{2}$', '', ts)
-    return datetime.fromisoformat(ts).replace(tzinfo=timezone.utc)
+    if ts.endswith('Z'):
+        ts = ts[:-1] + '+00:00'
+    dt = datetime.fromisoformat(ts)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def get_last_sync(acc_id):

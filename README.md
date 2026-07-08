@@ -81,6 +81,8 @@ python sync_ubiregi.py --since 2024-06-01 --until 2024-06-30
 - rotate は /etc/logrotate.d/bantosan-apps（weekly・8世代・copytruncate）
 - DB接続は SUPABASE_URL（内部PostgREST 127.0.0.1:3101）優先。公開URLはauth_request保護のためスクリプトからは不可
 - 店舗ごとに sync_logs の最終success−10分から増分。新店（前回同期なし）は自動フル同期
+- **2026-07-09 TZバグ修正**: parse_db_dt() が +09:00 オフセットを剥がしUTC扱いにしていたため、増分の since が9時間未来へシフト（毎日 前日03:00〜11:50 JST頃の更新分がどのrunにも入らない構造）。オフセット保持でパース→UTC正規化に修正。欠損していた 5/13（19023・closed 15会計 ¥267,135）は --since/--until 再取込で補填済み（分析用・MF送信対象外）
+- --since/--until の明示レンジ実行は pytz 使用（2026-07-09 venv に追加。requirements.txt は無し）
 - 1店舗のエラー（トークン失効等）は sync_logs に記録して次店舗へ継続
 
 ---
