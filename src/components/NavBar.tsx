@@ -20,6 +20,7 @@ const links = [
   { href: '/',      label: 'ダッシュボード' },
   { href: '/sales', label: '売上分析' },
   { href: '/items', label: '商品分析' },
+  { href: '/mf-send', label: 'MF送信' },
 ]
 
 export default function NavBar() {
