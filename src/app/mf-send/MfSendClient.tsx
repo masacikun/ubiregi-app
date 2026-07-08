@@ -33,6 +33,8 @@ export type DraftLine = {
 }
 
 const yen = (n: number) => `¥${n.toLocaleString('ja-JP')}`
+// 税込（真の売上税込）＝ 貸方売上(税抜) + 消費税。要確認日でも欠けない値（total_debitは複数決済分が未割当のため使わない）
+const inclOf = (d: DraftRow) => d.total_credit + d.consumption_tax_amount
 
 type StatusKey = 'sent' | 'sendable' | 'review'
 function statusOf(d: DraftRow): StatusKey {
@@ -41,28 +43,37 @@ function statusOf(d: DraftRow): StatusKey {
   return 'sendable'
 }
 
-function Badge({ status, d }: { status: StatusKey; d: DraftRow }) {
-  if (status === 'sent')
-    return <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">送信済み</span>
-  if (status === 'review')
-    return (
-      <span
-        className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300"
-        title={`要確認（4-2で対応予定）: ${d.review_reasons.join(' / ')}`}
-      >
-        要確認
-      </span>
-    )
-  if (d.send_status === 'error')
-    return <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300">エラー（再送可）</span>
-  return <span className="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">送信可</span>
+const BADGE = {
+  sent: { label: '送信済', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300' },
+  sendable: { label: '送信可', cls: 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300' },
+  review: { label: '要確認', cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300' },
+} as const
+
+const DOW = ['日', '月', '火', '水', '木', '金', '土']
+
+function monthDays(ym: string): (string | null)[] {
+  const [y, m] = ym.split('-').map(Number)
+  const first = new Date(y, m - 1, 1)
+  const last = new Date(y, m, 0).getDate()
+  const cells: (string | null)[] = Array(first.getDay()).fill(null)
+  for (let d = 1; d <= last; d++) cells.push(`${ym}-${String(d).padStart(2, '0')}`)
+  while (cells.length % 7 !== 0) cells.push(null)
+  return cells
+}
+function shiftMonth(ym: string, n: number): string {
+  const [y, m] = ym.split('-').map(Number)
+  const d = new Date(y, m - 1 + n, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+function todayStr(): string {
+  const d = new Date(Date.now() + 9 * 3600 * 1000)
+  return d.toISOString().slice(0, 10)
 }
 
 export default function MfSendClient({ drafts, lines, deptNames }: { drafts: DraftRow[]; lines: DraftLine[]; deptNames: Record<string, string> }) {
   const router = useRouter()
-  const [statusFilter, setStatusFilter] = useState<'all' | StatusKey>('all')
-  const [storeFilter, setStoreFilter] = useState<'all' | number>('all')
-  const [monthFilter, setMonthFilter] = useState<'all' | string>('all')
+  const months = useMemo(() => [...new Set(drafts.map(d => d.business_date.slice(0, 7)))].sort(), [drafts])
+  const [month, setMonth] = useState(months[months.length - 1] ?? todayStr().slice(0, 7))
   const [preview, setPreview] = useState<DraftRow | null>(null)
   const [toast, setToast] = useState<{ ok: boolean; message: string } | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -76,34 +87,22 @@ export default function MfSendClient({ drafts, lines, deptNames }: { drafts: Dra
     return m
   }, [lines])
 
-  const stores = useMemo(() => {
-    const m = new Map<number, string>()
-    for (const d of drafts) m.set(d.account_id, d.store_name)
-    return [...m.entries()]
-  }, [drafts])
-  const months = useMemo(() => [...new Set(drafts.map(d => d.business_date.slice(0, 7)))].sort(), [drafts])
-
-  const filtered = useMemo(() => {
-    const rows = drafts.filter(d =>
-      (statusFilter === 'all' || statusOf(d) === statusFilter) &&
-      (storeFilter === 'all' || d.account_id === storeFilter) &&
-      (monthFilter === 'all' || d.business_date.startsWith(monthFilter)),
-    )
-    // 未送信（送信可→要確認）を上に、その中で日付降順
-    const rank = (d: DraftRow) => ({ sendable: 0, review: 1, sent: 2 }[statusOf(d)])
-    return rows.sort((a, b) => rank(a) - rank(b) || b.business_date.localeCompare(a.business_date) || a.department_code.localeCompare(b.department_code))
-  }, [drafts, statusFilter, storeFilter, monthFilter])
-
-  const summary = useMemo(() => {
-    let sentAmt = 0, unsentAmt = 0, reviewDays = 0
-    for (const d of filtered) {
-      const st = statusOf(d)
-      if (st === 'sent') sentAmt += d.total_debit
-      else unsentAmt += d.total_debit
-      if (st === 'review') reviewDays++
+  // 店（account_id昇順＝中洲→西新）と、店ごとのデータ開始日（それ以前は対象外表示）
+  const storeList = useMemo(() => {
+    const m = new Map<number, { name: string; minDate: string }>()
+    for (const d of drafts) {
+      const cur = m.get(d.account_id)
+      if (!cur) m.set(d.account_id, { name: d.store_name, minDate: d.business_date })
+      else if (d.business_date < cur.minDate) cur.minDate = d.business_date
     }
-    return { sentAmt, unsentAmt, reviewDays }
-  }, [filtered])
+    return [...m.entries()].sort((a, b) => a[0] - b[0])
+  }, [drafts])
+
+  const byStoreDate = useMemo(() => {
+    const m = new Map<string, DraftRow>()
+    for (const d of drafts) m.set(`${d.account_id}|${d.business_date}`, d)
+    return m
+  }, [drafts])
 
   function doSend(d: DraftRow) {
     startTransition(async () => {
@@ -115,147 +114,170 @@ export default function MfSendClient({ drafts, lines, deptNames }: { drafts: Dra
     })
   }
 
-  const sel = 'rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm'
+  const today = todayStr()
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
-      <h1 className="text-xl font-bold mb-1">MF送信（ユビレジ売上 日次仕訳）</h1>
+    <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+        <h1 className="text-xl font-bold">MF送信（ユビレジ売上 日次仕訳）</h1>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setMonth(shiftMonth(month, -1))} className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">◀ 前月</button>
+          <div className="font-bold tabular-nums">{month.replace('-', '年')}月</div>
+          <button onClick={() => setMonth(shiftMonth(month, 1))} className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">翌月 ▶</button>
+        </div>
+      </div>
       <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-        借方=現金/売掛金（<b>税込</b>・部門・取引先）／貸方=売上高（<b>税抜</b>・税率別・部門）。送信できるのはクリーンな日（要確認なし）のみ。
+        セルの金額は<b>税込</b>売上。日をタップで仕訳プレビュー（借方=現金/売掛金・税込／貸方=売上高・税抜）。送信できるのはクリーンな日のみ。
       </p>
 
-      {/* フィルタ */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <select className={sel} value={statusFilter} onChange={e => setStatusFilter(e.target.value as never)}>
-          <option value="all">全状態</option>
-          <option value="sendable">未送信（送信可）</option>
-          <option value="review">要確認</option>
-          <option value="sent">送信済み</option>
-        </select>
-        <select className={sel} value={String(storeFilter)} onChange={e => setStoreFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}>
-          <option value="all">全店舗</option>
-          {stores.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-        </select>
-        <select className={sel} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
-          <option value="all">全期間</option>
-          {months.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {storeList.map(([accountId, info]) => {
+          const monthDrafts = drafts.filter(d => d.account_id === accountId && d.business_date.startsWith(month))
+          const sum = {
+            ex: monthDrafts.reduce((s, d) => s + d.total_credit, 0),
+            tax: monthDrafts.reduce((s, d) => s + d.consumption_tax_amount, 0),
+            cnt: monthDrafts.reduce((s, d) => s + (d.checkout_count ?? 0), 0),
+            sent: monthDrafts.filter(d => statusOf(d) === 'sent').length,
+            sendable: monthDrafts.filter(d => statusOf(d) === 'sendable').length,
+            review: monthDrafts.filter(d => statusOf(d) === 'review').length,
+          }
+          return (
+            <div key={accountId} className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+              <h2 className="font-bold mb-2">{info.name} <span className="text-xs font-normal text-slate-400">（部門{monthDrafts[0]?.department_code ?? (accountId === 19023 ? '201' : '202')}）</span></h2>
 
-      {/* 集計ヘッダ */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400">送信済み金額（税込）</div>
-          <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{yen(summary.sentAmt)}</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400">未送信金額（税込）</div>
-          <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{yen(summary.unsentAmt)}</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400">要確認の日数</div>
-          <div className="text-lg font-bold text-amber-600 dark:text-amber-400">{summary.reviewDays}日</div>
-        </div>
-      </div>
-
-      {filtered.every(d => statusOf(d) !== 'sendable') && (
-        <div className="mb-4 rounded border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-300">
-          送信可能な未送信の日はありません（クリーンな日はすべて送信済みです）。
-        </div>
-      )}
-
-      {/* 一覧 */}
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-100 dark:bg-slate-800 text-left">
-            <tr>
-              <th className="px-3 py-2">営業日</th>
-              <th className="px-3 py-2">店舗</th>
-              <th className="px-3 py-2">部門</th>
-              <th className="px-3 py-2 text-right">金額（税込）</th>
-              <th className="px-3 py-2 text-right">会計数</th>
-              <th className="px-3 py-2">状態</th>
-              <th className="px-3 py-2">操作 / MF仕訳</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(d => {
-              const st = statusOf(d)
-              return (
-                <tr key={d.id} className="border-t border-slate-200 dark:border-slate-700">
-                  <td className="px-3 py-2 whitespace-nowrap">{d.business_date}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{d.store_name}</td>
-                  <td className="px-3 py-2">{d.department_code}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{yen(d.total_debit)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{d.checkout_count ?? '-'}</td>
-                  <td className="px-3 py-2"><Badge status={st} d={d} /></td>
-                  <td className="px-3 py-2">
-                    {st === 'sendable' && (
-                      <button
-                        onClick={() => setPreview(d)}
-                        className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold"
-                      >
-                        確認して送信
-                      </button>
-                    )}
-                    {st === 'sent' && (
-                      <span className="text-xs text-slate-400 break-all" title={d.mf_journal_id ?? ''}>
-                        MF: {(d.mf_journal_id ?? '').slice(0, 10)}…
-                      </span>
-                    )}
-                    {st === 'review' && <span className="text-xs text-slate-400">4-2で対応</span>}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* プレビューモーダル */}
-      {preview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !isPending && setPreview(null)}>
-          <div className="w-full max-w-2xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h2 className="font-bold text-lg mb-1">送信前プレビュー</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-              {preview.business_date}　{preview.store_name}（部門{preview.department_code}）　摘要: ユビレジ売上 {deptNames[preview.department_code] ?? preview.department_code} {preview.business_date}
-            </p>
-            {(['debit', 'credit'] as const).map(side => (
-              <div key={side} className="mb-3">
-                <div className="text-sm font-semibold mb-1">{side === 'debit' ? '借方（現金/売掛金・税込）' : '貸方（売上高・税抜）'}</div>
-                <table className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded">
-                  <tbody>
-                    {(linesByDraft.get(preview.id) ?? []).filter(l => l.side === side).map((l, i) => (
-                      <tr key={i} className="border-t first:border-t-0 border-slate-200 dark:border-slate-700">
-                        <td className="px-2 py-1.5">{l.account_name}{l.sub_account_name ? ` / ${l.sub_account_name}` : ''}</td>
-                        <td className="px-2 py-1.5 text-xs text-slate-500">{l.trade_partner_name ?? ''}</td>
-                        <td className="px-2 py-1.5 text-xs text-slate-500">{l.tax_rate != null ? `${Math.round(Number(l.tax_rate) * 100)}%` : ''}{l.memo ? ` ${l.memo}` : ''}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums font-medium">{yen(l.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* 照合ヘッダ */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-sm">
+                <div className="rounded bg-slate-50 dark:bg-slate-800 p-2">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">売上（税抜）</div>
+                  <div className="font-bold tabular-nums">{yen(sum.ex)}</div>
+                </div>
+                <div className="rounded bg-slate-50 dark:bg-slate-800 p-2">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">消費税</div>
+                  <div className="font-bold tabular-nums">{yen(sum.tax)}</div>
+                </div>
+                <div className="rounded bg-slate-50 dark:bg-slate-800 p-2">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">売上（税込）</div>
+                  <div className="font-bold tabular-nums">{yen(sum.ex + sum.tax)}</div>
+                </div>
+                <div className="rounded bg-slate-50 dark:bg-slate-800 p-2">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">会計数</div>
+                  <div className="font-bold tabular-nums">{sum.cnt}件</div>
+                </div>
               </div>
-            ))}
-            <div className="rounded bg-slate-50 dark:bg-slate-800 p-3 text-sm mb-4">
-              借方合計（税込） {yen(preview.total_debit)} ＝ 貸方合計（税抜） {yen(preview.total_credit)} ＋ 消費税 {yen(preview.consumption_tax_amount)}
-              {preview.total_debit === preview.total_credit + preview.consumption_tax_amount
-                ? <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-semibold">✓ 貸借一致</span>
-                : <span className="ml-2 text-red-600 font-semibold">✗ 不一致（送信しないでください）</span>}
+              <div className="flex gap-3 mb-3 text-xs">
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">送信済み {sum.sent}日</span>
+                <span className="text-blue-600 dark:text-blue-400 font-semibold">未送信 {sum.sendable}日</span>
+                <span className="text-amber-600 dark:text-amber-400 font-semibold">要確認 {sum.review}日</span>
+              </div>
+
+              {/* カレンダー */}
+              <div className="grid grid-cols-7 text-center text-[11px] text-slate-500 dark:text-slate-400 mb-1">
+                {DOW.map((w, i) => <div key={w} className={i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : ''}>{w}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {monthDays(month).map((date, i) => {
+                  if (!date) return <div key={i} />
+                  const d = byStoreDate.get(`${accountId}|${date}`)
+                  const dayNum = Number(date.slice(8))
+                  const isFuture = date > today
+                  const beforeData = date < info.minDate
+                  if (!d) {
+                    return (
+                      <div key={i} className="min-h-[64px] rounded border border-slate-100 dark:border-slate-800 p-1 text-left">
+                        <div className="text-[11px] text-slate-400">{dayNum}</div>
+                        {!isFuture && !beforeData && date >= '2026-06-01' && (
+                          <div className="text-[10px] text-slate-400 mt-1">売上なし</div>
+                        )}
+                      </div>
+                    )
+                  }
+                  const st = statusOf(d)
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setPreview(d)}
+                      className={`min-h-[64px] rounded border p-1 text-left transition-colors hover:ring-2 hover:ring-blue-400 ${
+                        st === 'sent' ? 'border-emerald-200 dark:border-emerald-800'
+                        : st === 'sendable' ? 'border-blue-300 dark:border-blue-700'
+                        : 'border-amber-300 dark:border-amber-700'
+                      }`}
+                      title={st === 'review' ? `要確認: ${d.review_reasons.join(' / ')}` : undefined}
+                    >
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">{dayNum}</div>
+                      <div className="text-[11px] font-bold tabular-nums leading-tight">{yen(inclOf(d))}</div>
+                      <span className={`inline-block mt-0.5 px-1 py-0.5 rounded text-[9px] font-semibold ${BADGE[st].cls}`}>{BADGE[st].label}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setPreview(null)} disabled={isPending} className="px-4 py-2 rounded border border-slate-300 dark:border-slate-600 text-sm">キャンセル</button>
-              <button
-                onClick={() => doSend(preview)}
-                disabled={isPending || preview.total_debit !== preview.total_credit + preview.consumption_tax_amount}
-                className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold"
-              >
-                {isPending ? '送信中…' : 'MFへ送信'}
-              </button>
+          )
+        })}
+      </div>
+
+      {/* プレビューモーダル（4-1と同一内容・要確認日は送信不可） */}
+      {preview && (() => {
+        const st = statusOf(preview)
+        const balanced = preview.total_debit === preview.total_credit + preview.consumption_tax_amount
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !isPending && setPreview(null)}>
+            <div className="w-full max-w-2xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="font-bold text-lg">仕訳プレビュー</h2>
+                <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${BADGE[st].cls}`}>{BADGE[st].label}</span>
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
+                {preview.business_date}　{preview.store_name}（部門{preview.department_code}）　摘要: ユビレジ売上 {deptNames[preview.department_code] ?? preview.department_code} {preview.business_date}
+              </p>
+              {st === 'review' && (
+                <div className="mb-3 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+                  要確認: {preview.review_reasons.join(' / ')}（送信は4-2-2で対応予定）
+                </div>
+              )}
+              {st === 'sent' && (
+                <div className="mb-3 rounded border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300 break-all">
+                  送信済み　MF仕訳ID: {preview.mf_journal_id}
+                </div>
+              )}
+              {(['debit', 'credit'] as const).map(side => (
+                <div key={side} className="mb-3">
+                  <div className="text-sm font-semibold mb-1">{side === 'debit' ? '借方（現金/売掛金・税込）' : '貸方（売上高・税抜）'}</div>
+                  <table className="w-full text-sm border border-slate-200 dark:border-slate-700 rounded">
+                    <tbody>
+                      {(linesByDraft.get(preview.id) ?? []).filter(l => l.side === side).map((l, i) => (
+                        <tr key={i} className="border-t first:border-t-0 border-slate-200 dark:border-slate-700">
+                          <td className="px-2 py-1.5">{l.account_name}{l.sub_account_name ? ` / ${l.sub_account_name}` : ''}</td>
+                          <td className="px-2 py-1.5 text-xs text-slate-500">{l.trade_partner_name ?? ''}</td>
+                          <td className="px-2 py-1.5 text-xs text-slate-500">{l.tax_rate != null ? `${Math.round(Number(l.tax_rate) * 100)}%` : ''}{l.memo ? ` ${l.memo}` : ''}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums font-medium">{yen(l.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+              <div className="rounded bg-slate-50 dark:bg-slate-800 p-3 text-sm mb-4">
+                借方合計（税込） {yen(preview.total_debit)} ＝ 貸方合計（税抜） {yen(preview.total_credit)} ＋ 消費税 {yen(preview.consumption_tax_amount)}
+                {balanced
+                  ? <span className="ml-2 text-emerald-600 dark:text-emerald-400 font-semibold">✓ 貸借一致</span>
+                  : <span className="ml-2 text-amber-600 dark:text-amber-400 font-semibold">△ 複数決済等の未割当あり（要確認）</span>}
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setPreview(null)} disabled={isPending} className="px-4 py-2 rounded border border-slate-300 dark:border-slate-600 text-sm">閉じる</button>
+                {st === 'sendable' && (
+                  <button
+                    onClick={() => doSend(preview)}
+                    disabled={isPending || !balanced}
+                    className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold"
+                  >
+                    {isPending ? '送信中…' : 'MFへ送信'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* トースト */}
       {toast && (
