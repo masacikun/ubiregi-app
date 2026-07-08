@@ -85,6 +85,20 @@ python sync_ubiregi.py --since 2024-06-01 --until 2024-06-30
 
 ---
 
+## MF会計 送信用 翻訳表（2026-07-08新設・フェーズ1）
+
+ユビレジ売上→MF仕訳送信用の対応表3テーブル（smileapp_db・service_roleのみ）：
+
+| テーブル | 内容 |
+|---|---|
+| ubiregi_category_map | 店×カテゴリ→3分類（food/drink/other＝MF補助 フード/ドリンク/その他）。36行（中洲25＋西新11）。UNIQUE(account_id, category_name) |
+| ubiregi_payment_map | payment_type_name→MF貸方（勘定科目＋補助）。現金は店別補助＋is_deposit_amount=true（預かり金＝金額はcheckouts.total起点）。11行 |
+| menu_item_review_flags | 商品名ベースの要確認フラグ（「その他料金」等・MF送信前に人が確認） |
+
+- 税率は表に持たない（明細tax_rateを正とし生成時に判定）。
+- needs_review=true の行は仕訳生成時に要確認扱い。仕訳生成ロジック・送信は次フェーズ。
+- 個別案件・確定ルールは smile-mgmt/docs/仕訳ルール集.md を参照。
+
 ## 画面構成
 
 | URL | 画面 |
