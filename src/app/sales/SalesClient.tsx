@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname } from 'next/navigation'
 import { useState, useMemo, useTransition } from 'react'
-import { STORES, ALL_LABEL } from '@/lib/stores'
+import { storeOptionsFor, type StoreInfo } from '@/lib/stores'
 
 type DailyRow = {
   sale_date:          string
@@ -28,6 +28,7 @@ type Props = {
   selectedTo:     string
   currentA:       string
   earliestYear:   number
+  stores:         StoreInfo[]
 }
 
 const DOW_COLORS_CLS = ['text-red-500','text-slate-600','text-slate-600','text-slate-600','text-slate-600','text-slate-600','text-blue-500']
@@ -104,7 +105,7 @@ function SparkLine({ values, color = '#3b82f6', height = 48 }: { values: number[
 export default function SalesClient({
   dailyCurrent, prevDayMap, paymentData, dowData, hodData, hodDowMatrix,
   periodTotal, periodCount, periodDiscount, yoyRevenue, yoyCount,
-  selectedFrom, selectedTo, currentA, earliestYear,
+  selectedFrom, selectedTo, currentA, earliestYear, stores,
 }: Props) {
   const router   = useRouter()
   const pathname = usePathname()
@@ -127,10 +128,7 @@ export default function SalesClient({
     startTransition(() => router.push(`${pathname}?a=${a ?? currentA}&from=${from}&to=${to}`))
   }
 
-  const storeOptions = [
-    { id: 'all', label: ALL_LABEL },
-    ...STORES.map(s => ({ id: String(s.id), label: s.label })),
-  ]
+  const storeOptions = storeOptionsFor(stores, currentA)
 
   const today    = new Date()
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`

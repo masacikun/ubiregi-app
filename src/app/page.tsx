@@ -1,7 +1,8 @@
 export const metadata = { title: '番頭さん｜ユビレジ分析｜ダッシュボード' }
 export const dynamic = 'force-dynamic'
 import { supabaseServer as supabase } from '@/lib/supabase-server'
-import { DEFAULT_ACCOUNT_ID } from '@/lib/stores'
+import { parseAccountParam } from '@/lib/stores'
+import { fetchStores } from '@/lib/stores-server'
 import DashboardClient from './DashboardClient'
 
 export const revalidate = 3600
@@ -14,7 +15,7 @@ function monthEnd(y: number, m: number) {
   return m === 12 ? `${y + 1}-01-01` : `${y}-${pad(m + 1)}-01`
 }
 
-async function getDashboardData(accountId: number | null, year: number, month: number) {
+async function getDashboardData(accountId: number | null, activeAccountIds: number[], year: number, month: number) {
   const pStart  = monthStart(year, month)
   const pEnd    = monthEnd(year, month)
   const pm      = month === 1 ? 12 : month - 1
@@ -34,8 +35,9 @@ async function getDashboardData(accountId: number | null, year: number, month: n
   const prev30End   = new Date(tomorrowJST.getTime() - 365 * 24 * 3600 * 1000)
     .toISOString().split('T')[0] + 'T00:00:00+09:00'
 
+  // 無指定（稼働店合計）は稼働店のみに絞る（閉店店舗は明示指定時のみ）
   function withStore(q: any) {
-    return accountId !== null ? q.eq('account_id', accountId) : q
+    return accountId !== null ? q.eq('account_id', accountId) : q.in('account_id', activeAccountIds)
   }
 
   const [
@@ -209,10 +211,12 @@ export default async function DashboardPage({
   const aParam    = Array.isArray(params.a) ? params.a[0] : params.a
   const yParam    = Array.isArray(params.y) ? params.y[0] : params.y
   const mParam    = Array.isArray(params.m) ? params.m[0] : params.m
-  const accountId = aParam === 'all' ? null : aParam ? Number(aParam) : DEFAULT_ACCOUNT_ID
+  const accountId = parseAccountParam(aParam)
+  const stores    = await fetchStores()
+  const activeAccountIds = stores.filter(s => s.isActive).map(s => s.accountId)
   const today     = new Date()
   const year      = yParam ? Number(yParam) : today.getFullYear()
   const month     = mParam ? Number(mParam) : today.getMonth() + 1
-  const data      = await getDashboardData(accountId, year, month)
-  return <DashboardClient {...data} />
+  const data      = await getDashboardData(accountId, activeAccountIds, year, month)
+  return <DashboardClient {...data} stores={stores} />
 }

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useTransition } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { STORES, ALL_LABEL } from '@/lib/stores'
+import { storeOptionsFor, type StoreInfo } from '@/lib/stores'
 
 type RankingItem = {
   menu_item_id:   number | null
@@ -14,6 +14,7 @@ type RankingItem = {
 }
 
 type Props = {
+  stores:              StoreInfo[]
   ranking:             RankingItem[]
   rowsFetched:         number
   isPeriodFiltered:    boolean
@@ -81,7 +82,7 @@ function DonutChart({ data, size = 128 }: { data: { label: string; value: number
 }
 
 export default function ItemsClient({
-  ranking, rowsFetched, isPeriodFiltered, selectedFrom, selectedTo, currentA,
+  stores, ranking, rowsFetched, isPeriodFiltered, selectedFrom, selectedTo, currentA,
   pairingData, hodTopItems, dowTopItems, seasonalData,
   repeatRateData, hodCategoryData, monthlyCategoryData, newItemData,
 }: Props) {
@@ -104,10 +105,7 @@ export default function ItemsClient({
   // カテゴリ複数選択（null = 全選択）
   const [selectedCats,     setSelectedCats]     = useState<Set<string> | null>(null)
 
-  const storeOptions = [
-    { id: 'all', label: ALL_LABEL },
-    ...STORES.map(s => ({ id: String(s.id), label: s.label })),
-  ]
+  const storeOptions = storeOptionsFor(stores, currentA)
 
   function navigate(from: string | null, to: string | null, a?: string) {
     const p = new URLSearchParams({ a: a ?? currentA })

@@ -1,7 +1,8 @@
 export const metadata = { title: '商品分析' }
 export const dynamic = 'force-dynamic'
 import { supabaseServer as supabase } from '@/lib/supabase-server'
-import { DEFAULT_ACCOUNT_ID } from '@/lib/stores'
+import { parseAccountParam } from '@/lib/stores'
+import { fetchStores } from '@/lib/stores-server'
 import ItemsClient from './ItemsClient'
 
 export const revalidate = 3600
@@ -214,9 +215,10 @@ function computeTimeAnalysis(
   return { pairingData, hodTopItems, dowTopItems, seasonalData, repeatRateData, hodCategoryData, monthlyCategoryData, newItemData }
 }
 
-async function getItemsData(accountId: number | null, from: string | null, to: string | null) {
+async function getItemsData(accountId: number | null, activeAccountIds: number[], from: string | null, to: string | null) {
+  // 無指定（稼働店合計）は稼働店のみに絞る（閉店店舗は明示指定時のみ）
   function withStore(q: any) {
-    return accountId !== null ? q.eq('account_id', accountId) : q
+    return accountId !== null ? q.eq('account_id', accountId) : q.in('account_id', activeAccountIds)
   }
 
   if (from && to) {
@@ -325,12 +327,15 @@ export default async function ItemsPage({
   const aParam    = Array.isArray(params.a)    ? params.a[0]    : params.a
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from
   const toParam   = Array.isArray(params.to)   ? params.to[0]   : params.to
-  const accountId = aParam === 'all' ? null : aParam ? Number(aParam) : DEFAULT_ACCOUNT_ID
+  const accountId = parseAccountParam(aParam)
+  const stores    = await fetchStores()
+  const activeAccountIds = stores.filter(s => s.isActive).map(s => s.accountId)
 
-  const data = await getItemsData(accountId, fromParam ?? null, toParam ?? null)
+  const data = await getItemsData(accountId, activeAccountIds, fromParam ?? null, toParam ?? null)
 
   return (
     <ItemsClient
+      stores={stores}
       ranking={data.ranking}
       rowsFetched={data.rowsFetched}
       isPeriodFiltered={data.isPeriodFiltered}

@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { STORES, ALL_LABEL, DEFAULT_ACCOUNT_ID } from '@/lib/stores'
+import { storeOptionsFor, type StoreInfo } from '@/lib/stores'
 
 const EXTERNAL_LINKS = [
   { href: 'https://banto.hakata-yamato.co.jp/card', label: '名刺' },
@@ -24,7 +24,7 @@ const links = [
   { href: '/mf-send', label: 'MF送信' },
 ]
 
-export default function NavBar() {
+export default function NavBar({ stores }: { stores: StoreInfo[] }) {
   const pathname     = usePathname()
   const searchParams = useSearchParams()
   const router       = useRouter()
@@ -32,9 +32,12 @@ export default function NavBar() {
 
   useEffect(() => { setNavigating(false) }, [pathname, searchParams])
 
-  const currentA = searchParams.get('a') ?? String(DEFAULT_ACCOUNT_ID)
+  const currentA = searchParams.get('a') ?? 'all'
   const currentY = searchParams.get('y') ?? ''
-  const isDashboard = pathname === '/'
+  // ダッシュボードはページ内タブ、過去店舗は一覧ページのため共通セレクタは出さない
+  const hideSelector = pathname === '/' || pathname === '/past-stores'
+
+  const storeOptions = storeOptionsFor(stores, currentA)
 
   function buildParams(overrides: Record<string, string | null> = {}) {
     const p = new URLSearchParams()
@@ -64,15 +67,14 @@ export default function NavBar() {
           <img src="/u/logo.svg" alt="番頭さん" className="w-6 h-6 rounded-full" />ユビレジ分析
         </Link>
         <div className="flex items-center gap-3">
-          {!isDashboard && (
+          {!hideSelector && (
             <select
               value={currentA}
               onChange={handleStoreChange}
               className="text-xs bg-slate-700 border border-slate-600 text-white rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              <option value="all">{ALL_LABEL}</option>
-              {STORES.map(s => (
-                <option key={s.id} value={String(s.id)}>{s.label}</option>
+              {storeOptions.map(s => (
+                <option key={s.id} value={s.id}>{s.label}</option>
               ))}
             </select>
           )}
@@ -91,6 +93,17 @@ export default function NavBar() {
                 {link.label}
               </Link>
             ))}
+            <Link
+              href="/past-stores"
+              onClick={() => pathname !== '/past-stores' && setNavigating(true)}
+              className={`px-3 py-2 rounded text-xs font-semibold transition-colors ${
+                pathname === '/past-stores'
+                  ? 'bg-slate-600 text-white'
+                  : 'text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+              }`}
+            >
+              過去店舗
+            </Link>
             <div className="ml-2 flex items-center gap-1.5 border-l border-slate-600 pl-3">
               {EXTERNAL_LINKS.map(link => (
                 <a

@@ -1,7 +1,8 @@
 export const metadata = { title: '売上分析' }
 export const dynamic = 'force-dynamic'
 import { supabaseServer as supabase } from '@/lib/supabase-server'
-import { DEFAULT_ACCOUNT_ID } from '@/lib/stores'
+import { parseAccountParam } from '@/lib/stores'
+import { fetchStores } from '@/lib/stores-server'
 import SalesClient from './SalesClient'
 
 export const revalidate = 3600
@@ -19,14 +20,15 @@ function addYears(d: string, n: number): string {
   return `${y + n}-${String(mo).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-async function getSalesData(accountId: number | null, from: string, to: string) {
+async function getSalesData(accountId: number | null, activeAccountIds: number[], from: string, to: string) {
   const prevFrom = addYears(from, -1)
   const prevTo   = addYears(to,   -1)
   const fromJST  = from + 'T00:00:00+09:00'
   const toJST    = addDays(to, 1) + 'T00:00:00+09:00'
 
+  // 無指定（稼働店合計）は稼働店のみに絞る（閉店店舗は明示指定時のみ）
   function withStore(q: any) {
-    return accountId !== null ? q.eq('account_id', accountId) : q
+    return accountId !== null ? q.eq('account_id', accountId) : q.in('account_id', activeAccountIds)
   }
 
   const [
@@ -129,7 +131,9 @@ export default async function SalesPage({
   const fromParam = Array.isArray(params.from) ? params.from[0] : params.from
   const toParam   = Array.isArray(params.to)   ? params.to[0]   : params.to
 
-  const accountId = aParam === 'all' ? null : aParam ? Number(aParam) : DEFAULT_ACCOUNT_ID
+  const accountId = parseAccountParam(aParam)
+  const stores    = await fetchStores()
+  const activeAccountIds = stores.filter(s => s.isActive).map(s => s.accountId)
 
   const today = new Date()
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
@@ -138,6 +142,6 @@ export default async function SalesPage({
   const from = fromParam ?? thisMonthStart
   const to   = toParam   ?? todayStr
 
-  const data = await getSalesData(accountId, from, to)
-  return <SalesClient {...data} />
+  const data = await getSalesData(accountId, activeAccountIds, from, to)
+  return <SalesClient {...data} stores={stores} />
 }

@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname } from 'next/navigation'
 import { useState, useTransition } from 'react'
-import { STORES, ALL_LABEL } from '@/lib/stores'
+import { storeOptionsFor, type StoreInfo } from '@/lib/stores'
 
 type DowEntry   = { dow: number; label: string; total: number; count: number }
 type HodEntry   = { hour: number; total: number; count: number }
@@ -36,6 +36,7 @@ type Props = {
   availableYears:  number[]
   currentA:        string
   jstToday:        string
+  stores:          StoreInfo[]
 }
 
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
@@ -98,17 +99,14 @@ export default function DashboardClient({
   periodTotal, periodCount, periodDiscount, prevTotal, prevYearTotal,
   momRevenue, yoyRevenue, momCount, avgCheckout, momAvg,
   yearCumulative, yoyLast30, bestDay,
-  selectedYear, selectedMonth, availableYears, currentA, jstToday,
+  selectedYear, selectedMonth, availableYears, currentA, jstToday, stores,
 }: Props) {
   const router   = useRouter()
   const pathname = usePathname()
   const [isPending, startTransition] = useTransition()
   const [topTab, setTopTab] = useState<TabKey>('all')
 
-  const storeOptions = [
-    { id: 'all', label: ALL_LABEL },
-    ...STORES.map(s => ({ id: String(s.id), label: s.label })),
-  ]
+  const storeOptions = storeOptionsFor(stores, currentA)
 
   function nav(overrides: Record<string, string>) {
     const p = new URLSearchParams({ a: currentA, y: String(selectedYear), m: String(selectedMonth) })
