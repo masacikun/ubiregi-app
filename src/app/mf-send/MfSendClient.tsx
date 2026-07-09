@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { sendDraftAction, resolveCheckoutAction, applySalesReclassAction, unresolveCheckoutAction, resetDraftAction, verifyJournalsAction, type Allocation } from './actions'
+import { sendDraftAction, resolveCheckoutAction, applySalesReclassAction, unresolveCheckoutAction, resetDraftAction, verifyJournalsAction, generateDraftsAction, type Allocation } from './actions'
 
 export type DraftRow = {
   id: number
@@ -364,6 +364,13 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
       notify(res)
     })
   }
+  function doGenerate() {
+    if (!window.confirm('6/1〜前営業日のドラフトを最新の会計データで生成・更新します。\n送信済みの日／複数決済の手動確定／補正は保護されます（会計データが変わっていた場合は要確認に戻ります）。\n生成のみでMF送信はしません。よろしいですか？')) return
+    startTransition(async () => {
+      const res = await generateDraftsAction()
+      notify(res)
+    })
+  }
   function doReset(d: DraftRow) {
     if (!window.confirm(`${d.business_date} ${d.store_name} の仕訳ドラフトを初期状態に再生成します。\nこの日の手動確定・補正はすべてやり直しになります（送信済みの日は対象外）。よろしいですか？`)) return
     startTransition(async () => {
@@ -389,11 +396,15 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
         セルの金額は<b>税込</b>売上。日をタップで仕訳プレビュー。要確認の日はプレビュー内で複数決済の確定・補正ができます。
       </p>
 
-      {/* MF突合（乖離検知）: 送信済み仕訳がMF側で変更/削除されていないか＋送信後の後着会計 */}
+      {/* 生成＋MF突合（乖離検知）: 生成はsent保護・確定/補正引き継ぎつき。突合は送信済み仕訳のズレ検査 */}
       <div className="flex flex-wrap items-center gap-2 mb-4 text-xs">
+        <button onClick={doGenerate} disabled={isPending}
+          className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-semibold disabled:opacity-50">
+          {isPending ? '実行中…' : '⚙ ドラフト生成（〜前営業日）'}
+        </button>
         <button onClick={doVerify} disabled={isPending}
           className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-600 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
-          {isPending ? '突合中…' : '⚖ MFと突合'}
+          {isPending ? '実行中…' : '⚖ MFと突合'}
         </button>
         {verifyRun ? (
           <span className={verifyBad > 0 ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-slate-500 dark:text-slate-400'}>

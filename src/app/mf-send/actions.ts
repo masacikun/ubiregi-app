@@ -209,6 +209,39 @@ export async function unresolveCheckoutAction(reviewItemId: number): Promise<Sen
   return { ok: true, message: '確定を取り消しました（この会計は要確認に戻りました）' }
 }
 
+// E. ドラフト生成（4-2-3: CLI卒業）: 6/1〜前営業日を最新の会計データで生成。
+// sent保護＋手動確定/補正の引き継ぎ（再生成保護）は generate_journal_drafts.mjs 側で担保。
+// 当日（営業中）は対象外＝日中送信による後着取りこぼし事故を構造的に防ぐ。生成のみ・送信しない。
+function lastCompleteBusinessDate(): string {
+  // 現在の営業日（JST−5h）の前日＝直近の「確定した」営業日
+  const bd = new Date(Date.now() + (9 - 5) * 3600 * 1000)
+  bd.setUTCDate(bd.getUTCDate() - 1)
+  return bd.toISOString().slice(0, 10)
+}
+
+export async function generateDraftsAction(): Promise<SendResult> {
+  try {
+    const to = lastCompleteBusinessDate()
+    const { stdout } = await execFileAsync(
+      'node',
+      ['scripts/generate_journal_drafts.mjs', '--to', to],
+      { cwd: process.cwd(), timeout: 300_000 },
+    )
+    const g = stdout.match(/生成: (\d+)日分 \/ 送信済み保護スキップ: (\d+)/)
+    const rv = stdout.match(/要確認日数: (\d+)/)
+    const cy = stdout.match(/引き継ぎ: 確定(\d+)件・補正(\d+)件 \/ 競合(\d+)件/)
+    if (!g) return { ok: false, message: `想定外の結果: ${stdout.slice(-300)}` }
+    const parts = [`生成${g[1]}日`, `送信済み保護${g[2]}日`, `要確認${rv?.[1] ?? '?'}日`]
+    if (cy && (Number(cy[1]) + Number(cy[2]) + Number(cy[3]) > 0)) {
+      parts.push(`引き継ぎ 確定${cy[1]}・補正${cy[2]}${Number(cy[3]) > 0 ? `・⚠️競合${cy[3]}件（要確認に戻しました）` : ''}`)
+    }
+    return { ok: true, message: `ドラフト生成完了（〜${to}）: ${parts.join('・')}` }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, message: `生成エラー: ${msg.slice(0, 300)}` }
+  }
+}
+
 // D. MF突合（乖離検知・2026-07-09方針: MF×番頭さん両方から操作しうるデータは全て乖離検知）
 // sent済みドラフト vs MF実仕訳（削除/修正検知）＋ vs 現在のユビレジ集計（後着データ検知）。結果は verify_runs に保存。
 export async function verifyJournalsAction(): Promise<SendResult> {
@@ -239,7 +272,8 @@ export async function resetDraftAction(draftId: number): Promise<SendResult> {
   try {
     const { stdout } = await execFileAsync(
       'node',
-      ['scripts/generate_journal_drafts.mjs', '--from', draft.business_date, '--to', draft.business_date, '--account', String(draft.account_id)],
+      // --no-carry: リセット＝意図的なやり直しなので確定・補正は引き継がない（通常生成は引き継ぐ）
+      ['scripts/generate_journal_drafts.mjs', '--from', draft.business_date, '--to', draft.business_date, '--account', String(draft.account_id), '--no-carry'],
       { cwd: process.cwd(), timeout: 120_000 },
     )
     if (!stdout.includes('生成:')) return { ok: false, message: `想定外の結果: ${stdout.slice(-300)}` }

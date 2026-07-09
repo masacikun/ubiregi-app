@@ -62,6 +62,8 @@ const FROM = argOf('--from', HYD_START) < HYD_START ? HYD_START : argOf('--from'
 const TO = argOf('--to', todayJst())
 // --account <ubiregi account_id>: 指定時はその店だけ再生成（mf-send の日次リセット用。他店の未送信確定を巻き込まない）
 const ACCOUNT = argOf('--account', null)
+// --no-carry: 手動確定・補正の引き継ぎをしない（日次リセット＝意図的なやり直し用。通常の再生成は引き継ぐ）
+const NO_CARRY = args.includes('--no-carry')
 
 const CLASS_JA = { food: 'フード', drink: 'ドリンク', other: 'その他' }
 
@@ -110,7 +112,7 @@ async function main() {
     days.get(key).checkouts.push(co)
   }
 
-  const report = { generated: 0, skippedSent: 0, reviewDays: 0, reasonCount: {}, balanceNg: [], fallbackRates: 0, unknown: new Set() }
+  const report = { generated: 0, skippedSent: 0, reviewDays: 0, reasonCount: {}, balanceNg: [], fallbackRates: 0, unknown: new Set(), carriedConfirms: 0, carriedOverrides: 0, carryConflicts: [] }
 
   for (const [key, day] of [...days.entries()].sort()) {
     const [bdate, accStr] = key.split('|')
@@ -217,7 +219,10 @@ async function main() {
       report.skippedSent++
       continue
     }
+    // ★4-2-3保護: 削除前に手動確定（review_items.detail.applied）と補正（overrides）を退避し、再生成後に再適用する
+    let carry = null
     if (existing) {
+      carry = NO_CARRY ? null : await snapshotCarry(existing.id)
       const { error } = await sb.from('ubiregi_journal_drafts').delete().eq('id', existing.id).neq('send_status', 'sent')
       if (error) throw new Error(error.message)
     }
@@ -238,6 +243,27 @@ async function main() {
       if (error) throw new Error(error.message)
     }
 
+    // ★4-2-3保護: 退避した確定・補正を再適用（競合＝会計変化/元行不足は再適用せず要確認へ戻す）
+    if (carry && (carry.resolvedMulti.length || carry.overrides.length)) {
+      const conflicts = []
+      for (const ci of carry.resolvedMulti) {
+        const r = await reapplyConfirm(draft.id, ci)
+        if (r.ok) report.carriedConfirms++
+        else conflicts.push(r.reason)
+      }
+      for (const ov of carry.overrides) {
+        const r = await reapplyOverride(draft.id, ov)
+        if (r.ok) report.carriedOverrides++
+        else conflicts.push(r.reason)
+      }
+      if (conflicts.length) {
+        report.carryConflicts.push(...conflicts.map(c => `${bdate} ${dept}: ${c}`))
+        for (const c of conflicts) reasons.add(c)
+      }
+      await recomputeAfterCarry(draft.id, [...reasons])
+      console.log(`  [引継] ${bdate} ${dept} 確定${carry.resolvedMulti.length}件・補正${carry.overrides.length}件 → 競合${conflicts.length}件`)
+    }
+
     report.generated++
     if (reasons.size) {
       report.reviewDays++
@@ -256,6 +282,133 @@ async function main() {
   console.log(`税率フォールバック明細: ${report.fallbackRates}件`)
   console.log(`未知（翻訳表の穴）:`, report.unknown.size ? [...report.unknown] : 'なし')
   console.log(`貸借不一致（複数決済等を除くクリーン日で）: ${report.balanceNg.length}件`, report.balanceNg)
+  console.log(`引き継ぎ: 確定${report.carriedConfirms}件・補正${report.carriedOverrides}件 / 競合${report.carryConflicts.length}件`, report.carryConflicts.length ? report.carryConflicts : '')
+}
+
+// ─── 4-2-3 再生成保護（手動確定・補正の退避と再適用） ───────────────────────
+
+// 削除前に、複数決済の手動確定（detail.applied 必須）と補正（overrides）を退避
+async function snapshotCarry(draftId) {
+  const { data: items, error: e1 } = await sb.from('ubiregi_journal_review_items')
+    .select('checkout_id, reason, detail').eq('draft_id', draftId).eq('resolved', true).eq('reason', '複数決済')
+  if (e1) throw new Error(e1.message)
+  const { data: ovs, error: e2 } = await sb.from('ubiregi_journal_draft_overrides')
+    .select('kind, original, replacement, reason').eq('draft_id', draftId)
+  if (e2) throw new Error(e2.message)
+  return { resolvedMulti: items ?? [], overrides: ovs ?? [] }
+}
+
+// 確定の再適用: 同じ会計が金額不変で存在する場合のみ、保存済み配分で借方行を再構築（UIの確定と同一ロジック）
+async function reapplyConfirm(draftId, ci) {
+  const applied = ci.detail?.applied
+  if (!Array.isArray(applied) || applied.length === 0) {
+    return { ok: false, reason: `再生成競合:確定引継不可(co=${ci.checkout_id}・配分記録なし)` }
+  }
+  const { data: newItems } = await sb.from('ubiregi_journal_review_items')
+    .select('id, detail').eq('draft_id', draftId).eq('checkout_id', ci.checkout_id).eq('reason', '複数決済').limit(1)
+  const ni = newItems?.[0]
+  const oldTotal = Math.round(Number(ci.detail?.total ?? 0))
+  const newTotal = ni ? Math.round(Number(ni.detail?.total ?? 0)) : null
+  const appliedSum = applied.reduce((s, a) => s + a.amountIncl, 0)
+  if (!ni || newTotal !== oldTotal || appliedSum !== newTotal) {
+    return { ok: false, reason: `再生成競合:確定引継不可(co=${ci.checkout_id}・会計変化)` }
+  }
+  const tag = `複数決済確定 co=${ci.checkout_id}`
+  for (const a of applied.filter(x => x.amountIncl > 0)) {
+    let q = sb.from('ubiregi_journal_draft_lines')
+      .select('id, amount, memo').eq('draft_id', draftId).eq('side', 'debit').eq('account_name', a.account).is('tax_rate', null)
+    q = a.sub == null ? q.is('sub_account_name', null) : q.eq('sub_account_name', a.sub)
+    q = a.partner == null ? q.is('trade_partner_name', null) : q.eq('trade_partner_name', a.partner)
+    const { data: hit } = await q.limit(1)
+    if (hit?.[0]) {
+      const { error } = await sb.from('ubiregi_journal_draft_lines')
+        .update({ amount: hit[0].amount + a.amountIncl, memo: hit[0].memo ? `${hit[0].memo} / ${tag}` : tag }).eq('id', hit[0].id)
+      if (error) throw new Error(error.message)
+    } else {
+      const { data: maxRow } = await sb.from('ubiregi_journal_draft_lines')
+        .select('sort_order').eq('draft_id', draftId).order('sort_order', { ascending: false }).limit(1)
+      const { error } = await sb.from('ubiregi_journal_draft_lines').insert({
+        draft_id: draftId, side: 'debit', account_name: a.account, sub_account_name: a.sub,
+        trade_partner_name: a.partner, tax_rate: null, amount: a.amountIncl,
+        sort_order: (maxRow?.[0]?.sort_order ?? 0) + 1, memo: tag,
+      })
+      if (error) throw new Error(error.message)
+    }
+  }
+  await sb.from('ubiregi_journal_review_items')
+    .update({ resolved: true, detail: { ...(ni.detail ?? {}), applied } }).eq('id', ni.id)
+  return { ok: true }
+}
+
+// 補正(sales_reclass)の再適用: 元行が十分な金額で存在する場合のみ同じ振替を再適用し、監査行を再挿入
+async function reapplyOverride(draftId, ov) {
+  if (ov.kind !== 'sales_reclass') return { ok: false, reason: `再生成競合:補正引継不可(未知kind=${ov.kind})` }
+  const fromSub = ov.original?.sub
+  const fromEx = Math.round(Number(ov.original?.amount_ex ?? 0))
+  const repl = ov.replacement ?? []
+  if (!fromSub || fromEx <= 0 || repl.length === 0) return { ok: false, reason: '再生成競合:補正引継不可(記録不完全)' }
+  const { data: fls } = await sb.from('ubiregi_journal_draft_lines')
+    .select('id, amount').eq('draft_id', draftId).eq('side', 'credit')
+    .eq('account_name', '売上高').eq('sub_account_name', fromSub).eq('tax_rate', 0.1).limit(1)
+  const fromLine = fls?.[0]
+  if (!fromLine || fromLine.amount < fromEx) return { ok: false, reason: `再生成競合:補正引継不可(元行 売上高/${fromSub} 不足)` }
+  const remain = fromLine.amount - fromEx
+  if (remain > 0) {
+    const { error } = await sb.from('ubiregi_journal_draft_lines')
+      .update({ amount: remain, memo: `補正で税抜¥${fromEx.toLocaleString()}を振替済み` }).eq('id', fromLine.id)
+    if (error) throw new Error(error.message)
+  } else {
+    const { error } = await sb.from('ubiregi_journal_draft_lines').delete().eq('id', fromLine.id)
+    if (error) throw new Error(error.message)
+  }
+  for (const a of repl) {
+    const ex = Math.round(Number(a.amount_ex ?? 0))
+    const { data: exl } = await sb.from('ubiregi_journal_draft_lines')
+      .select('id, amount').eq('draft_id', draftId).eq('side', 'credit')
+      .eq('account_name', '売上高').eq('sub_account_name', a.sub).eq('tax_rate', 0.1).limit(1)
+    if (exl?.[0]) {
+      const { error } = await sb.from('ubiregi_journal_draft_lines').update({ amount: exl[0].amount + ex }).eq('id', exl[0].id)
+      if (error) throw new Error(error.message)
+    } else {
+      const { data: maxRow } = await sb.from('ubiregi_journal_draft_lines')
+        .select('sort_order').eq('draft_id', draftId).order('sort_order', { ascending: false }).limit(1)
+      const { error } = await sb.from('ubiregi_journal_draft_lines').insert({
+        draft_id: draftId, side: 'credit', account_name: '売上高', sub_account_name: a.sub,
+        tax_rate: 0.1, amount: ex, sort_order: (maxRow?.[0]?.sort_order ?? 0) + 1, memo: '補正で追加（再生成引継）',
+      })
+      if (error) throw new Error(error.message)
+    }
+  }
+  const { error: eIns } = await sb.from('ubiregi_journal_draft_overrides').insert({
+    draft_id: draftId, kind: ov.kind, original: ov.original, replacement: ov.replacement,
+    reason: `${ov.reason}（再生成で引継再適用）`,
+  })
+  if (eIns) throw new Error(eIns.message)
+  await sb.from('ubiregi_journal_review_items')
+    .update({ resolved: true }).eq('draft_id', draftId).like('reason', '要確認商品%')
+  return { ok: true }
+}
+
+// 再適用後の合計・要確認フラグを再計算（UI側 recomputeDraft と同じ規約）
+async function recomputeAfterCarry(draftId, reasonsArr) {
+  const [{ data: lines }, { data: items }, { data: draft }] = await Promise.all([
+    sb.from('ubiregi_journal_draft_lines').select('side, amount').eq('draft_id', draftId),
+    sb.from('ubiregi_journal_review_items').select('id, resolved').eq('draft_id', draftId),
+    sb.from('ubiregi_journal_drafts').select('consumption_tax_amount').eq('id', draftId).single(),
+  ])
+  const totalDebit = (lines ?? []).filter(l => l.side === 'debit').reduce((s, l) => s + l.amount, 0)
+  const totalCredit = (lines ?? []).filter(l => l.side === 'credit').reduce((s, l) => s + l.amount, 0)
+  const unresolved = (items ?? []).filter(i => !i.resolved).length
+  const balanced = totalDebit === totalCredit + (draft?.consumption_tax_amount ?? 0)
+  const hasConflict = reasonsArr.some(r => r.startsWith('再生成競合'))
+  const { error } = await sb.from('ubiregi_journal_drafts')
+    .update({
+      total_debit: totalDebit, total_credit: totalCredit,
+      review_required: hasConflict || !(unresolved === 0 && balanced),
+      review_reasons: reasonsArr,
+    })
+    .eq('id', draftId).neq('send_status', 'sent')
+  if (error) throw new Error(error.message)
 }
 function nextDay(d) { return new Date(new Date(`${d}T00:00:00Z`).getTime() + 86400000).toISOString().slice(0, 10) }
 function groupBy(arr, f) {
