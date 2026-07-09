@@ -60,11 +60,13 @@ function argOf(name, def) {
 }
 const FROM = argOf('--from', HYD_START) < HYD_START ? HYD_START : argOf('--from', HYD_START)
 const TO = argOf('--to', todayJst())
+// --account <ubiregi account_id>: 指定時はその店だけ再生成（mf-send の日次リセット用。他店の未送信確定を巻き込まない）
+const ACCOUNT = argOf('--account', null)
 
 const CLASS_JA = { food: 'フード', drink: 'ドリンク', other: 'その他' }
 
 async function main() {
-  console.log(`=== 仕訳ドラフト生成 ${FROM} 〜 ${TO}（JST営業日） ===`)
+  console.log(`=== 仕訳ドラフト生成 ${FROM} 〜 ${TO}（JST営業日）${ACCOUNT ? `（account ${ACCOUNT} のみ）` : ''} ===`)
 
   // 対応表ロード
   const catRows = await fetchAll(() => sb.from('ubiregi_category_map').select('*').eq('is_active', true))
@@ -79,13 +81,15 @@ async function main() {
   const deptByAccount = new Map(upm.map(m => [Number(m.external_id), unitCode.get(m.unit_id)]))
 
   // 会計・明細・決済ロード
-  const checkouts = await fetchAll(() =>
-    sb.from('ubiregi_checkouts')
+  const checkouts = await fetchAll(() => {
+    let q = sb.from('ubiregi_checkouts')
       .select('id, account_id, subtotal, tax_amount, total, paid_at')
       .eq('status', 'closed')
       .gte('paid_at', jstStartUtc(FROM))
       .lt('paid_at', jstStartUtc(nextDay(TO)))
-      .order('id'))
+    if (ACCOUNT) q = q.eq('account_id', Number(ACCOUNT))
+    return q.order('id')
+  })
   const ids = checkouts.map(c => c.id)
   const items = [], payments = []
   for (const part of chunk(ids, 100)) {

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { sendDraftAction, resolveCheckoutAction, applySalesReclassAction, type Allocation } from './actions'
+import { sendDraftAction, resolveCheckoutAction, applySalesReclassAction, unresolveCheckoutAction, resetDraftAction, type Allocation } from './actions'
 
 export type DraftRow = {
   id: number
@@ -36,7 +36,7 @@ export type ReviewItem = {
   draft_id: number
   checkout_id: number | null
   reason: string
-  detail: { total?: number; payments?: { name: string; amount: number }[]; flag_reason?: string; subtotal?: number; checkout_total?: number } | null
+  detail: { total?: number; payments?: { name: string; amount: number }[]; flag_reason?: string; subtotal?: number; checkout_total?: number; applied?: Allocation[] } | null
   resolved: boolean
 }
 export type PaymentMapRow = {
@@ -197,6 +197,36 @@ function ResolveCheckoutCard({ item, paymentMap, accountId, onDone }: {
   )
 }
 
+// ---- 複数決済の確定済みカード（送信前なら取り消し可能） ----
+function ResolvedCheckoutCard({ item, onDone }: { item: ReviewItem; onDone: (r: { ok: boolean; message: string }) => void }) {
+  const [busy, setBusy] = useState(false)
+  const applied = item.detail?.applied ?? []
+  async function undo() {
+    if (!window.confirm(`会計ID ${item.checkout_id} の確定を取り消して「要確認」に戻します。よろしいですか？`)) return
+    setBusy(true)
+    const res = await unresolveCheckoutAction(item.id)
+    setBusy(false)
+    onDone(res)
+  }
+  return (
+    <div className="rounded border border-emerald-300 dark:border-emerald-700 p-3 mb-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs">
+          <span className="font-semibold text-emerald-700 dark:text-emerald-300">確定済み</span>
+          　複数決済（会計ID: {item.checkout_id}・合計 {yen(Math.round(Number(item.detail?.total ?? 0)))}）
+          {applied.length > 0 && (
+            <span className="text-slate-500 dark:text-slate-400"> → {applied.map(a => `${a.account}${a.sub ? `/${a.sub}` : ''} ${yen(a.amountIncl)}`).join(' ＋ ')}</span>
+          )}
+        </div>
+        <button onClick={undo} disabled={busy}
+          className="shrink-0 px-2 py-1 rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50">
+          {busy ? '取消中…' : '確定を取り消す'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ---- 7/2型 売上補正フォーム（イレギュラー専用） ----
 function ReclassForm({ draft, onDone }: { draft: DraftRow; onDone: (r: { ok: boolean; message: string }) => void }) {
   const [fromIncl, setFromIncl] = useState(140000)
@@ -313,6 +343,14 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
       notify(res)
     })
   }
+  function doReset(d: DraftRow) {
+    if (!window.confirm(`${d.business_date} ${d.store_name} の仕訳ドラフトを初期状態に再生成します。\nこの日の手動確定・補正はすべてやり直しになります（送信済みの日は対象外）。よろしいですか？`)) return
+    startTransition(async () => {
+      const res = await resetDraftAction(d.id)
+      setPreviewId(null)
+      notify(res)
+    })
+  }
 
   const today = todayStr()
 
@@ -408,6 +446,7 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
         const balanced = preview.total_debit === preview.total_credit + preview.consumption_tax_amount
         const items = itemsByDraft.get(preview.id) ?? []
         const unresolvedMulti = items.filter(r => r.reason === '複数決済' && !r.resolved)
+        const resolvedMulti = items.filter(r => r.reason === '複数決済' && r.resolved)
         const needsReclass = preview.review_reasons.some(r => r.startsWith('要確認商品')) && items.some(r => r.reason.startsWith('要確認商品') && !r.resolved)
         const ovs = overridesByDraft.get(preview.id) ?? []
         return (
@@ -431,6 +470,11 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
               {/* 要確認：複数決済の確定 */}
               {unresolvedMulti.map(item => (
                 <ResolveCheckoutCard key={item.id} item={item} paymentMap={paymentMap} accountId={preview.account_id} onDone={notify} />
+              ))}
+
+              {/* 確定済みの複数決済（送信前なら取り消せる） */}
+              {st !== 'sent' && resolvedMulti.map(item => (
+                <ResolvedCheckoutCard key={item.id} item={item} onDone={notify} />
               ))}
 
               {/* 要確認：7/2型の補正 */}
@@ -469,6 +513,13 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
                   : <span className="ml-2 text-amber-600 dark:text-amber-400 font-semibold">△ 差額 {yen(preview.total_credit + preview.consumption_tax_amount - preview.total_debit)}（複数決済の未確定）</span>}
               </div>
               <div className="flex justify-end gap-2">
+                {st !== 'sent' && (
+                  <button onClick={() => doReset(preview)} disabled={isPending}
+                    title="この日の仕訳ドラフトを生成し直します（手動確定・補正はやり直しになります）"
+                    className="mr-auto px-4 py-2 rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 text-sm hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-50">
+                    この日をリセット（再生成）
+                  </button>
+                )}
                 <button onClick={() => setPreviewId(null)} disabled={isPending} className="px-4 py-2 rounded border border-slate-300 dark:border-slate-600 text-sm">閉じる</button>
                 {st === 'sendable' && (
                   <button

@@ -128,7 +128,10 @@ export async function resolveCheckoutAction(reviewItemId: number, allocations: A
       if (eIns) return { ok: false, message: `行追加に失敗: ${eIns.message}` }
     }
   }
-  await supabaseAdmin.from('ubiregi_journal_review_items').update({ resolved: true }).eq('id', reviewItemId)
+  // 取り消し（unresolveCheckoutAction）で正確に逆演算できるよう、適用した配分を detail に保存する
+  await supabaseAdmin.from('ubiregi_journal_review_items')
+    .update({ resolved: true, detail: { ...((item.detail as Record<string, unknown>) ?? {}), applied: allocations.filter(a => a.amountIncl > 0) } })
+    .eq('id', reviewItemId)
 
   const { balanced, unresolved } = await recomputeDraft(item.draft_id)
   return {
@@ -136,6 +139,96 @@ export async function resolveCheckoutAction(reviewItemId: number, allocations: A
     message: unresolved === 0 && balanced
       ? '確定しました。貸借一致＝この日は送信可能になりました'
       : `確定しました（残り未確定${unresolved}件${balanced ? '' : '・貸借未一致'}）`,
+  }
+}
+
+// A'. 複数決済確定の取り消し（送信前のみ）：detail.applied を使って借方行から正確に減算し、要確認に戻す
+export async function unresolveCheckoutAction(reviewItemId: number): Promise<SendResult> {
+  const { data: item, error } = await supabaseAdmin
+    .from('ubiregi_journal_review_items')
+    .select('id, draft_id, checkout_id, reason, detail, resolved')
+    .eq('id', reviewItemId).single()
+  if (error || !item) return { ok: false, message: `対象が見つかりません: ${error?.message ?? reviewItemId}` }
+  if (!item.resolved) return { ok: false, message: 'この会計は未確定です（取り消し不要）' }
+  if (item.reason !== '複数決済') return { ok: false, message: 'この項目は複数決済ではありません' }
+
+  const { data: draft } = await supabaseAdmin.from('ubiregi_journal_drafts')
+    .select('id, send_status').eq('id', item.draft_id).single()
+  if (!draft || draft.send_status === 'sent') return { ok: false, message: '送信済みの日は変更できません' }
+
+  const applied = (item.detail as { applied?: Allocation[] })?.applied
+  if (!Array.isArray(applied) || applied.length === 0) {
+    return { ok: false, message: 'この確定には配分の記録がありません（機能追加前の確定）。「この日をリセット（再生成）」でやり直してください' }
+  }
+
+  // 同一キーはまとめてから（確定側も同一キーは1行に合算されているため、逆演算も合算で行う）
+  const byKey = new Map<string, Allocation>()
+  for (const a of applied) {
+    const key = `${a.account}|${a.sub ?? ''}|${a.partner ?? ''}`
+    const cur = byKey.get(key)
+    if (cur) cur.amountIncl += a.amountIncl
+    else byKey.set(key, { ...a })
+  }
+
+  // 事前に全行の減算可否を確認してから反映（途中失敗で中途半端にしない）
+  const tag = `複数決済確定 co=${item.checkout_id}`
+  const plans: { id: number; newAmount: number; newMemo: string | null }[] = []
+  for (const a of byKey.values()) {
+    let q = supabaseAdmin.from('ubiregi_journal_draft_lines')
+      .select('id, amount, memo')
+      .eq('draft_id', item.draft_id).eq('side', 'debit').eq('account_name', a.account)
+      .is('tax_rate', null)
+    q = a.sub === null ? q.is('sub_account_name', null) : q.eq('sub_account_name', a.sub)
+    q = a.partner === null ? q.is('trade_partner_name', null) : q.eq('trade_partner_name', a.partner)
+    const { data: hit } = await q.limit(1)
+    const line = hit?.[0]
+    if (!line || line.amount < a.amountIncl) {
+      return { ok: false, message: `取消対象の借方行が見つからないか金額が不足しています（${a.account}${a.sub ? `/${a.sub}` : ''}）。「この日をリセット（再生成）」でやり直してください` }
+    }
+    const parts = (line.memo ?? '').split(' / ').filter(Boolean)
+    const idx = parts.indexOf(tag)
+    if (idx >= 0) parts.splice(idx, 1)
+    plans.push({ id: line.id, newAmount: line.amount - a.amountIncl, newMemo: parts.length ? parts.join(' / ') : null })
+  }
+  for (const p of plans) {
+    if (p.newAmount === 0) {
+      const { error: eDel } = await supabaseAdmin.from('ubiregi_journal_draft_lines').delete().eq('id', p.id)
+      if (eDel) return { ok: false, message: `行削除に失敗: ${eDel.message}` }
+    } else {
+      const { error: eUp } = await supabaseAdmin.from('ubiregi_journal_draft_lines').update({ amount: p.newAmount, memo: p.newMemo }).eq('id', p.id)
+      if (eUp) return { ok: false, message: `行減算に失敗: ${eUp.message}` }
+    }
+  }
+
+  const detailRest = { ...((item.detail as Record<string, unknown>) ?? {}) }
+  delete detailRest.applied
+  await supabaseAdmin.from('ubiregi_journal_review_items')
+    .update({ resolved: false, detail: detailRest }).eq('id', reviewItemId)
+
+  await recomputeDraft(item.draft_id)
+  return { ok: true, message: '確定を取り消しました（この会計は要確認に戻りました）' }
+}
+
+// C. 日次リセット（送信前のみ）：この店×この日のドラフトを生成スクリプトで作り直す（万能のやり直し）。
+// 手動確定・補正はすべて初期状態に戻る（sent は生成スクリプト側でも保護）。他店・他日は --account/--from/--to で巻き込まない。
+export async function resetDraftAction(draftId: number): Promise<SendResult> {
+  const { data: draft, error } = await supabaseAdmin.from('ubiregi_journal_drafts')
+    .select('id, business_date, account_id, send_status').eq('id', draftId).single()
+  if (error || !draft) return { ok: false, message: `ドラフトが見つかりません: ${error?.message ?? draftId}` }
+  if (draft.send_status === 'sent') return { ok: false, message: '送信済みの日はリセットできません' }
+  if (draft.business_date < HYD_START) return { ok: false, message: '2026-06-01より前は対象外です' }
+
+  try {
+    const { stdout } = await execFileAsync(
+      'node',
+      ['scripts/generate_journal_drafts.mjs', '--from', draft.business_date, '--to', draft.business_date, '--account', String(draft.account_id)],
+      { cwd: process.cwd(), timeout: 120_000 },
+    )
+    if (!stdout.includes('生成:')) return { ok: false, message: `想定外の結果: ${stdout.slice(-300)}` }
+    return { ok: true, message: `${draft.business_date} を初期状態に再生成しました（確定・補正はやり直しできます）` }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, message: `再生成エラー: ${msg.slice(0, 300)}` }
   }
 }
 
