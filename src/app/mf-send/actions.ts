@@ -209,6 +209,24 @@ export async function unresolveCheckoutAction(reviewItemId: number): Promise<Sen
   return { ok: true, message: '確定を取り消しました（この会計は要確認に戻りました）' }
 }
 
+// D. MF突合（乖離検知・2026-07-09方針: MF×番頭さん両方から操作しうるデータは全て乖離検知）
+// sent済みドラフト vs MF実仕訳（削除/修正検知）＋ vs 現在のユビレジ集計（後着データ検知）。結果は verify_runs に保存。
+export async function verifyJournalsAction(): Promise<SendResult> {
+  try {
+    const { stdout } = await execFileAsync(
+      'node', ['scripts/ubiregi_journal_verify.mjs'],
+      { cwd: MF_APP_DIR, timeout: 180_000 },
+    )
+    const m = stdout.match(/OK (\d+) \/ 不一致 (\d+) \/ MF不在 (\d+) \/ 後着データ (\d+)/)
+    if (!m) return { ok: false, message: `想定外の結果: ${stdout.slice(-300)}` }
+    const bad = Number(m[2]) + Number(m[3]) + Number(m[4])
+    return { ok: true, message: bad === 0 ? `MF突合完了: 全${Number(m[1])}件一致（乖離なし）` : `MF突合完了: OK${m[1]}・不一致${m[2]}・MF不在${m[3]}・後着データ${m[4]} — ⚠️バッジの日を確認してください` }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, message: `突合エラー: ${msg.slice(0, 300)}` }
+  }
+}
+
 // C. 日次リセット（送信前のみ）：この店×この日のドラフトを生成スクリプトで作り直す（万能のやり直し）。
 // 手動確定・補正はすべて初期状態に戻る（sent は生成スクリプト側でも保護）。他店・他日は --account/--from/--to で巻き込まない。
 export async function resetDraftAction(draftId: number): Promise<SendResult> {

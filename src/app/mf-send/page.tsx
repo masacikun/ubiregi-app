@@ -2,10 +2,10 @@ export const metadata = { title: 'MF送信' }
 export const dynamic = 'force-dynamic'
 
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import MfSendClient, { type DraftRow, type DraftLine, type ReviewItem, type PaymentMapRow, type OverrideRow } from './MfSendClient'
+import MfSendClient, { type DraftRow, type DraftLine, type ReviewItem, type PaymentMapRow, type OverrideRow, type VerifyRun } from './MfSendClient'
 
 async function getData() {
-  const [draftsRes, linesRes, storesRes, unitsRes, itemsRes, pmRes, ovRes] = await Promise.all([
+  const [draftsRes, linesRes, storesRes, unitsRes, itemsRes, pmRes, ovRes, vrRes] = await Promise.all([
     supabaseAdmin
       .from('ubiregi_journal_drafts')
       .select('*')
@@ -29,8 +29,13 @@ async function getData() {
       .from('ubiregi_journal_draft_overrides')
       .select('id, draft_id, kind, original, replacement, reason, created_at')
       .order('id'),
+    supabaseAdmin
+      .from('ubiregi_journal_verify_runs')
+      .select('ran_at, summary, results')
+      .order('id', { ascending: false })
+      .limit(1),
   ])
-  for (const r of [draftsRes, linesRes, storesRes, unitsRes, itemsRes, pmRes, ovRes]) {
+  for (const r of [draftsRes, linesRes, storesRes, unitsRes, itemsRes, pmRes, ovRes, vrRes]) {
     if (r.error) throw new Error(r.error.message)
   }
 
@@ -63,6 +68,7 @@ async function getData() {
     reviewItems: (itemsRes.data ?? []) as ReviewItem[],
     paymentMap: (pmRes.data ?? []) as PaymentMapRow[],
     overrides: (ovRes.data ?? []) as OverrideRow[],
+    verifyRun: (vrRes.data?.[0] ?? null) as VerifyRun | null,
   }
 }
 

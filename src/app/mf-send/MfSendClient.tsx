@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { sendDraftAction, resolveCheckoutAction, applySalesReclassAction, unresolveCheckoutAction, resetDraftAction, type Allocation } from './actions'
+import { sendDraftAction, resolveCheckoutAction, applySalesReclassAction, unresolveCheckoutAction, resetDraftAction, verifyJournalsAction, type Allocation } from './actions'
 
 export type DraftRow = {
   id: number
@@ -55,6 +55,13 @@ export type OverrideRow = {
   replacement: { sub: string; amount_incl: number }[]
   reason: string
   created_at: string
+}
+
+export type VerifyResult = { draft_id: number; business_date: string; account_id: number; status: 'ok' | 'mismatch' | 'missing' | 'stale'; diffs: string[] }
+export type VerifyRun = {
+  ran_at: string
+  summary: { checked: number; ok: number; mismatch: number; missing: number; stale?: number }
+  results: VerifyResult[]
 }
 
 const yen = (n: number) => `¥${n.toLocaleString('ja-JP')}`
@@ -278,9 +285,10 @@ function ReclassForm({ draft, onDone }: { draft: DraftRow; onDone: (r: { ok: boo
   )
 }
 
-export default function MfSendClient({ drafts, lines, deptNames, reviewItems, paymentMap, overrides }: {
+export default function MfSendClient({ drafts, lines, deptNames, reviewItems, paymentMap, overrides, verifyRun }: {
   drafts: DraftRow[]; lines: DraftLine[]; deptNames: Record<string, string>
   reviewItems: ReviewItem[]; paymentMap: PaymentMapRow[]; overrides: OverrideRow[]
+  verifyRun: VerifyRun | null
 }) {
   const router = useRouter()
   const months = useMemo(() => [...new Set(drafts.map(d => d.business_date.slice(0, 7)))].sort(), [drafts])
@@ -343,6 +351,19 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
       notify(res)
     })
   }
+  const verifyByDraft = useMemo(() => {
+    const m = new Map<number, VerifyResult>()
+    for (const r of verifyRun?.results ?? []) m.set(r.draft_id, r)
+    return m
+  }, [verifyRun])
+  const verifyBad = (verifyRun?.summary.mismatch ?? 0) + (verifyRun?.summary.missing ?? 0) + (verifyRun?.summary.stale ?? 0)
+
+  function doVerify() {
+    startTransition(async () => {
+      const res = await verifyJournalsAction()
+      notify(res)
+    })
+  }
   function doReset(d: DraftRow) {
     if (!window.confirm(`${d.business_date} ${d.store_name} の仕訳ドラフトを初期状態に再生成します。\nこの日の手動確定・補正はすべてやり直しになります（送信済みの日は対象外）。よろしいですか？`)) return
     startTransition(async () => {
@@ -364,9 +385,27 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
           <button onClick={() => setMonth(shiftMonth(month, 1))} className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-100 dark:hover:bg-slate-800">翌月 ▶</button>
         </div>
       </div>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
         セルの金額は<b>税込</b>売上。日をタップで仕訳プレビュー。要確認の日はプレビュー内で複数決済の確定・補正ができます。
       </p>
+
+      {/* MF突合（乖離検知）: 送信済み仕訳がMF側で変更/削除されていないか＋送信後の後着会計 */}
+      <div className="flex flex-wrap items-center gap-2 mb-4 text-xs">
+        <button onClick={doVerify} disabled={isPending}
+          className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-600 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
+          {isPending ? '突合中…' : '⚖ MFと突合'}
+        </button>
+        {verifyRun ? (
+          <span className={verifyBad > 0 ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-slate-500 dark:text-slate-400'}>
+            最終突合 {new Date(verifyRun.ran_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}：
+            {verifyBad === 0
+              ? `全${verifyRun.summary.checked}件一致`
+              : `⚠️ 乖離 ${verifyBad}件（MF修正 ${verifyRun.summary.mismatch}・MF不在 ${verifyRun.summary.missing}・後着データ ${verifyRun.summary.stale ?? 0}）`}
+          </span>
+        ) : (
+          <span className="text-slate-400">未実行（「MFと突合」で送信済み仕訳とMF実物のズレを検査）</span>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {storeList.map(([accountId, info]) => {
@@ -417,6 +456,8 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
                   }
                   const st = statusOf(d)
                   const hasOverride = (overridesByDraft.get(d.id)?.length ?? 0) > 0
+                  const vr = verifyByDraft.get(d.id)
+                  const vWarn = vr != null && vr.status !== 'ok'
                   return (
                     <button
                       key={i}
@@ -425,12 +466,13 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
                         st === 'sent' ? 'border-emerald-200 dark:border-emerald-800'
                         : st === 'sendable' ? 'border-blue-300 dark:border-blue-700'
                         : 'border-amber-300 dark:border-amber-700'
-                      }`}
-                      title={st === 'review' ? `要確認: ${d.review_reasons.join(' / ')}` : undefined}
+                      } ${vWarn ? 'ring-2 ring-red-500' : ''}`}
+                      title={vWarn ? `MF乖離: ${vr!.diffs.join(' / ')}` : st === 'review' ? `要確認: ${d.review_reasons.join(' / ')}` : undefined}
                     >
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">{dayNum}{hasOverride && <span className="ml-1 text-purple-500">補</span>}</div>
                       <div className="text-[11px] font-bold tabular-nums leading-tight">{yen(inclOf(d))}</div>
                       <span className={`inline-block mt-0.5 px-1 py-0.5 rounded text-[9px] font-semibold ${BADGE[st].cls}`}>{BADGE[st].label}</span>
+                      {vWarn && <span className="inline-block mt-0.5 ml-0.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-red-600 text-white">⚠MF</span>}
                     </button>
                   )
                 })}
@@ -466,6 +508,24 @@ export default function MfSendClient({ drafts, lines, deptNames, reviewItems, pa
                   送信済み　MF仕訳ID: {preview.mf_journal_id}
                 </div>
               )}
+
+              {/* 乖離検知の結果（MF側の修正/削除・送信後の後着データ） */}
+              {(() => {
+                const vr = verifyByDraft.get(preview.id)
+                if (!vr || vr.status === 'ok') return null
+                const label = vr.status === 'missing' ? 'MFに仕訳が見つかりません' : vr.status === 'stale' ? '送信後にユビレジ会計が変化しています' : 'MF側で修正された可能性があります'
+                return (
+                  <div className="mb-3 rounded border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-xs">
+                    <div className="font-semibold text-red-700 dark:text-red-300 mb-1">⚠️ MFとの乖離を検知：{label}</div>
+                    <ul className="list-disc pl-4 space-y-0.5 text-red-800 dark:text-red-200">
+                      {vr.diffs.map((df, i) => <li key={i}>{df}</li>)}
+                    </ul>
+                    <div className="mt-1.5 text-slate-600 dark:text-slate-400">
+                      対処の原則：MFで直接直さず<b>番頭さんから</b>（MF仕訳の削除→ドラフト戻し→再確定→再送。Claudeに依頼可）。MF側の修正が正しい場合はその旨を記録に残してください。
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* 要確認：複数決済の確定 */}
               {unresolvedMulti.map(item => (
