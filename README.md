@@ -152,5 +152,6 @@ node scripts/generate_journal_drafts.mjs --from 2026-07-01 --to 2026-07-31
 - **ドラフト生成ボタン（4-2-3完・CLI卒業）**: 「⚙ドラフト生成（〜前営業日）」で generate_journal_drafts.mjs を実行（6/1〜前営業日・当日進行分は作らない＝日中送信の後着事故防止。CLI併存・同一結果）。生成のみでMF送信はしない。
 - **再生成保護（4-2-3完・最重要）**: 再生成時に sent はスキップ（従来どおり）、未送信日の**複数決済の手動確定**（review_items.detail.applied）と**補正**（overrides）は削除前に退避→再生成後に自動再適用。会計が変わっていた等の競合時は再適用せず review_reasons に「再生成競合:…」を追記して**要確認に戻す**（黙って上書きしない）。日次リセットは --no-carry（意図的なやり直し＝引き継がない）。
 - **MF乖離検知（2026-07-09方針の第1号）**: 「⚖MFと突合」ボタンで mf-accounting-sync/scripts/ubiregi_journal_verify.mjs を実行。sent済みドラフト vs MF実仕訳（MF側の修正=mismatch・削除=missing）＋ vs 現在のユビレジ集計（送信後の後着会計=stale）。乖離日はカレンダーに赤枠＋⚠MFバッジ・プレビューに差分と対処原則を表示。結果は ubiregi_journal_verify_runs（最新runを表示）。
+- **MF乖離検知（2026-07-09方針の第1号）**: 「⚖MFと突合」ボタンで mf-accounting-sync/scripts/ubiregi_journal_verify.mjs を実行。sent済みドラフト vs MF実仕訳（MF側の修正=mismatch・削除=missing）＋ vs 現在のユビレジ集計（送信後の後着会計=stale）。乖離日はカレンダーに赤枠＋⚠MFバッジ・プレビューに差分と対処原則を表示。結果は ubiregi_journal_verify_runs（最新runを表示）。
 - **日次リセット（送信前・2026-07-09追加）**: プレビューの「この日をリセット（再生成）」で generate_journal_drafts.mjs を --from/--to/--account 付きで実行し、**その店×その日だけ**初期状態に再生成（手動確定・補正はやり直し）。sent はスクリプト側でも保護。
 - 注意: 生成スクリプトの**全期間**再実行は未送信ドラフトを作り直すため手動確定・補正が消える（意図的にやり直したい場合はUIの日次リセットで店×日単位に）。
