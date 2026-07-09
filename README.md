@@ -127,6 +127,16 @@ node scripts/generate_journal_drafts.mjs --from 2026-07-01 --to 2026-07-31
 | `/` | ダッシュボード（KPI + 日別売上 + TOP5） |
 | `/sales` | 売上分析（月別推移 + 支払方法別） |
 | `/items` | 商品分析（カテゴリ別 + 商品ランキング） |
+| `/past-stores` | 過去店舗（閉店店舗の一覧・累計サマリー・各分析へのドリルダウン。参照専用） |
+
+
+## 店舗セレクタ＝stores テーブル駆動（稼働店ファースト・2026-07-10）
+
+- 店舗一覧のハードコード（旧 `src/lib/stores.ts` の STORES 配列＝3店・西新42765欠落）を撤廃し、DB `stores` テーブル（master-app 管轄の店舗マスタ）駆動に変更。取得は `src/lib/stores-server.ts` の `fetchStores()`（service_role・リクエスト内 cache）。
+- **稼働判定は `stores.status = '営業中'` を正とする**（`is_active` カラムの新設は取りやめ＝`status`/`closed_on` が既存のため二重管理を回避）。判定文字列は `ACTIVE_STATUS` 定数（`src/lib/stores.ts`）に一元化。
+- 既定表示（URL `a` 無指定 or `a=all`）＝「稼働店合計」＝ 営業中の店舗のみ集計。閉店店舗は現役画面のセレクタに出ない。
+- `a=<ubiregi account_id>` を明示指定すると閉店店舗も表示可（セレクタに「店名（閉店）」として表示）。`/past-stores` から各分析へこの形式で遷移（分析ロジックは既存を再利用）。
+- 閉店バッジ: `stores.closed_on` があれば日付併記、無ければ「閉店」のみ（日付は捏造しない）。
 
 
 ## MF送信UI（フェーズ4-1→4-2-1でカレンダー化・2026-07-09/10）
