@@ -72,11 +72,13 @@ async function main() {
 
   // 対応表ロード
   const catRows = await fetchAll(() => sb.from('ubiregi_category_map').select('*').eq('is_active', true))
+  const ovRows = await fetchAll(() => sb.from('ubiregi_product_category_overrides').select('*').eq('is_active', true))
   const payRows = await fetchAll(() => sb.from('ubiregi_payment_map').select('*').eq('is_active', true))
   const flagRows = await fetchAll(() => sb.from('menu_item_review_flags').select('*').eq('is_active', true))
   const upm = await fetchAll(() => sb.from('unit_pos_mappings').select('external_id, unit_id').eq('pos_type', 'ubiregi'))
   const units = await fetchAll(() => sb.from('units').select('id, code'))
   const catMap = new Map(catRows.map(r => [`${r.account_id ?? 'null'}|${r.category_name}`, r]))
+  const ovMap = new Map(ovRows.map(r => [`${r.account_id}|${r.menu_item_id}`, r]))
   const payMap = new Map(payRows.map(r => [`${r.account_id ?? 'null'}|${r.payment_type_name}`, r]))
   const flagMap = new Map(flagRows.map(r => [r.menu_item_name, r.reason]))
   const unitCode = new Map(units.map(u => [u.id, u.code]))
@@ -96,7 +98,7 @@ async function main() {
   const items = [], payments = []
   for (const part of chunk(ids, 100)) {
     items.push(...await fetchAll(() => sb.from('ubiregi_checkout_items')
-      .select('checkout_id, menu_item_name, category_name, tax_rate, tax_type, subtotal').in('checkout_id', part).order('id')))
+      .select('checkout_id, menu_item_id, menu_item_name, category_name, tax_rate, tax_type, subtotal').in('checkout_id', part).order('id')))
     payments.push(...await fetchAll(() => sb.from('ubiregi_checkout_payments')
       .select('checkout_id, payment_type_name, amount').in('checkout_id', part).order('id')))
   }
@@ -130,15 +132,19 @@ async function main() {
       taxSum += Number(co.tax_amount)
 
       for (const it of itemsByCo.get(co.id) ?? []) {
+        // 区分の優先順: ①商品オーバーライド(account_id, menu_item_id) → ②カテゴリ既定 → ③未知=other+要確認
+        const ov = it.menu_item_id != null ? ovMap.get(`${accountId}|${it.menu_item_id}`) : undefined
         const cm = catMap.get(`${accountId}|${it.category_name}`) ?? catMap.get(`null|${it.category_name}`)
-        let cls = cm?.sales_class
-        if (!cm) {
-          cls = 'other'
-          reasons.add(`未知カテゴリ:${it.category_name}`)
-          report.unknown.add(`カテゴリ:${it.category_name}`)
-          reviewItems.push({ checkout_id: co.id, reason: `未知カテゴリ:${it.category_name}`, detail: { menu_item_name: it.menu_item_name, subtotal: Number(it.subtotal) } })
-        } else if (cm.needs_review) {
-          reasons.add(`要確認カテゴリ:${it.category_name}`)
+        let cls = ov?.sales_class ?? cm?.sales_class
+        if (!ov) {
+          if (!cm) {
+            cls = 'other'
+            reasons.add(`未知カテゴリ:${it.category_name}`)
+            report.unknown.add(`カテゴリ:${it.category_name}`)
+            reviewItems.push({ checkout_id: co.id, reason: `未知カテゴリ:${it.category_name}`, detail: { menu_item_name: it.menu_item_name, subtotal: Number(it.subtotal) } })
+          } else if (cm.needs_review) {
+            reasons.add(`要確認カテゴリ:${it.category_name}`)
+          }
         }
         const fr = flagMap.get(it.menu_item_name)
         if (fr) {

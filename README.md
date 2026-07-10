@@ -96,9 +96,11 @@ python sync_ubiregi.py --since 2024-06-01 --until 2024-06-30
 | ubiregi_category_map | 店×カテゴリ→3分類（food/drink/other＝MF補助 フード/ドリンク/その他）。36行（中洲25＋西新11）。UNIQUE(account_id, category_name) |
 | ubiregi_payment_map | payment_type_name→MF貸方（勘定科目＋補助）。現金は店別補助＋is_deposit_amount=true（預かり金＝金額はcheckouts.total起点）。11行 |
 | menu_item_review_flags | 商品名ベースの要確認フラグ（「その他料金」等・MF送信前に人が確認） |
+| ubiregi_product_category_overrides | **商品単位の区分オーバーライド**（B方針 Phase1・2026-07-10新設）。(account_id, menu_item_id)→food/drink/other。カテゴリ既定より優先。DDL=db/ubiregi_product_category_overrides.sql |
 
+- **区分判定の優先順**: ①商品オーバーライド（account_id, menu_item_id・is_active）→ ②カテゴリ既定（category_map）→ ③未知カテゴリ=other＋要確認。
 - 税率は表に持たない（明細tax_rateを正とし生成時に判定）。
-- needs_review=true の行は仕訳生成時に要確認扱い。
+- needs_review=true の行は仕訳生成時に要確認扱い（オーバーライドが効いている明細には適用しない＝明示決定を優先）。
 - 個別案件・確定ルールは smile-mgmt/docs/仕訳ルール集.md を参照。
 
 ### 日次仕訳ドラフト生成（フェーズ2・2026-07-09）
@@ -128,6 +130,8 @@ node scripts/generate_journal_drafts.mjs --from 2026-07-01 --to 2026-07-31
 | `/sales` | 売上分析（月別推移 + 支払方法別） |
 | `/items` | 商品分析（カテゴリ別 + 商品ランキング） |
 | `/past-stores` | 過去店舗（閉店店舗の一覧・累計サマリー・各分析へのドリルダウン。参照専用） |
+| `/mf-send` | MF送信（日次×店ドラフトのカレンダー・プレビュー・送信。下記「MF送信UI」参照） |
+| `/sales-class` | 売上区分マッピング（カテゴリ区分＋商品オーバーライド編集。下記「売上区分マッピングUI」参照） |
 
 
 ## 店舗セレクタ＝stores テーブル駆動（稼働店ファースト・2026-07-10）
@@ -162,6 +166,15 @@ node scripts/generate_journal_drafts.mjs --from 2026-07-01 --to 2026-07-31
 - **ドラフト生成ボタン（4-2-3完・CLI卒業）**: 「⚙ドラフト生成（〜前営業日）」で generate_journal_drafts.mjs を実行（6/1〜前営業日・当日進行分は作らない＝日中送信の後着事故防止。CLI併存・同一結果）。生成のみでMF送信はしない。
 - **再生成保護（4-2-3完・最重要）**: 再生成時に sent はスキップ（従来どおり）、未送信日の**複数決済の手動確定**（review_items.detail.applied）と**補正**（overrides）は削除前に退避→再生成後に自動再適用。会計が変わっていた等の競合時は再適用せず review_reasons に「再生成競合:…」を追記して**要確認に戻す**（黙って上書きしない）。日次リセットは --no-carry（意図的なやり直し＝引き継がない）。
 - **MF乖離検知（2026-07-09方針の第1号）**: 「⚖MFと突合」ボタンで mf-accounting-sync/scripts/ubiregi_journal_verify.mjs を実行。sent済みドラフト vs MF実仕訳（MF側の修正=mismatch・削除=missing）＋ vs 現在のユビレジ集計（送信後の後着会計=stale）。乖離日はカレンダーに赤枠＋⚠MFバッジ・プレビューに差分と対処原則を表示。結果は ubiregi_journal_verify_runs（最新runを表示）。
-- **MF乖離検知（2026-07-09方針の第1号）**: 「⚖MFと突合」ボタンで mf-accounting-sync/scripts/ubiregi_journal_verify.mjs を実行。sent済みドラフト vs MF実仕訳（MF側の修正=mismatch・削除=missing）＋ vs 現在のユビレジ集計（送信後の後着会計=stale）。乖離日はカレンダーに赤枠＋⚠MFバッジ・プレビューに差分と対処原則を表示。結果は ubiregi_journal_verify_runs（最新runを表示）。
 - **日次リセット（送信前・2026-07-09追加）**: プレビューの「この日をリセット（再生成）」で generate_journal_drafts.mjs を --from/--to/--account 付きで実行し、**その店×その日だけ**初期状態に再生成（手動確定・補正はやり直し）。sent はスクリプト側でも保護。
 - 注意: 生成スクリプトの**全期間**再実行は未送信ドラフトを作り直すため手動確定・補正が消える（意図的にやり直したい場合はUIの日次リセットで店×日単位に）。
+
+## 売上区分マッピングUI（B方針 Phase1・2026-07-10）
+
+`/u/sales-class` — MF送信の売上振り分け（フード/ドリンク/その他）を編集するページ。店タブ（unit_pos_mappings のユビレジ店＝中洲19023・西新42765）。
+
+- 背景: 飲み放題「D1000円/D500円」がユビレジで「コース」カテゴリ所属のため food に計上され、宴会中心日（7/7〜7/9）のドリンク構成比が異常低下（0.5〜5.5%）していた（Phase 0調査で確定）。カテゴリ単位では直せないため**商品単位オーバーライド**を導入。
+- **セクションA カテゴリ区分**: ubiregi_category_map を表示・編集（UPSERT）。直近90日の実売にあるが未登録のカテゴリは赤帯「未登録」で警告（区分を選ぶと行が作成される）。
+- **セクションB 商品オーバーライド**: 直近90日に実売のあった商品（ubiregi_checkout_items から menu_item_id 単位に集約）を一覧。既定区分（カテゴリ由来）／実効区分／オーバーライドセレクタ（既定に従う/フード/ドリンク/その他）／理由メモ。上書き中はアンバー帯＋バッジで強調。商品名・カテゴリの絞り込み検索付き（税込/税別の変種を素早く拾う用）。
+- 保存は ubiregi_product_category_overrides への UPSERT（解除は is_active=false・行は監査用に残す・DELETEしない）。
+- **反映タイミング**: 次回のドラフト生成（毎日4:10 cron／mf-send の生成ボタン・日次リセット）から。**送信済み(sent)の日は再生成スキップされるため影響しない**（過去分の修正・再送は別Phase・まさし判断）。

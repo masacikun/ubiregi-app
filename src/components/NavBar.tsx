@@ -22,6 +22,7 @@ const links = [
   { href: '/sales', label: '売上分析' },
   { href: '/items', label: '商品分析' },
   { href: '/mf-send', label: 'MF送信' },
+  { href: '/sales-class', label: '売上区分' },
 ]
 
 export default function NavBar({ stores }: { stores: StoreInfo[] }) {
