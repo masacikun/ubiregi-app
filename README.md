@@ -84,6 +84,7 @@ python sync_ubiregi.py --since 2024-06-01 --until 2024-06-30
 - **2026-07-09 TZバグ修正**: parse_db_dt() が +09:00 オフセットを剥がしUTC扱いにしていたため、増分の since が9時間未来へシフト（毎日 前日03:00〜11:50 JST頃の更新分がどのrunにも入らない構造）。オフセット保持でパース→UTC正規化に修正。欠損していた 5/13（19023・closed 15会計 ¥267,135）は --since/--until 再取込で補填済み（分析用・MF送信対象外）
 - --since/--until の明示レンジ実行は pytz 使用（2026-07-09 venv に追加。requirements.txt は無し）
 - 1店舗のエラー（トークン失効等）は sync_logs に記録して次店舗へ継続
+- **2026-07-12 checkout税内訳の投入追加**: sync_checkouts() が ubiregi_checkout_taxes へ delete→insert（checkout単位・税率別 taxable_amount/tax_amount。tax_rate は%→小数変換で 0.10/0.08）。従来はテーブルのみ存在しコード未実装で全店0行だった。8%/10% 税集計クロスチェック用（仕訳は従来どおり明細 tax_rate 参照で不変）
 
 ---
 

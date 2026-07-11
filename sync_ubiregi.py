@@ -287,6 +287,19 @@ def sync_checkouts(session, acc_id, since=None, until=None, item_map=None, payme
                 })
             sb_execute(lambda rows=pay_rows: supabase_client.table("ubiregi_checkout_payments").insert(rows).execute())
 
+        sb_execute(lambda: supabase_client.table("ubiregi_checkout_taxes").delete().eq("checkout_id", co_id).execute())
+        if taxes:
+            tax_rows = [{
+                "checkout_id":    co_id,
+                "account_id":     acc_id,
+                "tax_type":       t.get("tax_type"),
+                "tax_rate":       round(to_f(t.get("tax_rate")) / 100, 4) if to_f(t.get("tax_rate")) is not None else None,
+                "taxable_amount": to_f(t.get("sales", 0)) or 0,
+                "tax_amount":     to_f(t.get("tax", 0)) or 0,
+                "raw_data":       t,
+            } for t in taxes]
+            sb_execute(lambda rows=tax_rows: supabase_client.table("ubiregi_checkout_taxes").insert(rows).execute())
+
         total += 1
         if total % 50 == 0:
             print(f"    {total} 件処理済み...")
