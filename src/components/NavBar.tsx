@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useSearchParams, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { storeOptionsFor, type StoreInfo } from '@/lib/stores'
+import UserMenu from '@/components/UserMenu'
 
 const EXTERNAL_LINKS = [
   { href: 'https://banto.hakata-yamato.co.jp/card', label: '名刺' },
@@ -115,6 +116,7 @@ export default function NavBar({ stores }: { stores: StoreInfo[] }) {
                   {link.label}
                 </a>
               ))}
+              <UserMenu />
             </div>
           </nav>
         </div>
