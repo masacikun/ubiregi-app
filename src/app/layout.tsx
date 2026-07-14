@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Geist } from 'next/font/google'
 import { Suspense } from 'react'
 import NavBar from '@/components/NavBar'
+import AuthGuard from '@/components/AuthGuard'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { fetchStores } from '@/lib/stores-server'
 import './globals.css'
@@ -21,6 +22,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ja" className={geist.variable} suppressHydrationWarning>
       <body className="bg-gray-50 dark:bg-gray-950 min-h-screen antialiased transition-colors">
+        <AuthGuard />
         <ThemeProvider>
           <Suspense fallback={<header className="bg-slate-900 h-14 shadow-lg" />}>
             <NavBar stores={stores} />
