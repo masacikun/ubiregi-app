@@ -179,3 +179,6 @@ node scripts/generate_journal_drafts.mjs --from 2026-07-01 --to 2026-07-31
 - **セクションB 商品オーバーライド**: 直近90日に実売のあった商品（ubiregi_checkout_items から menu_item_id 単位に集約）を一覧。既定区分（カテゴリ由来）／実効区分／オーバーライドセレクタ（既定に従う/フード/ドリンク/その他）／理由メモ。上書き中はアンバー帯＋バッジで強調。商品名・カテゴリの絞り込み検索付き（税込/税別の変種を素早く拾う用）。
 - 保存は ubiregi_product_category_overrides への UPSERT（解除は is_active=false・行は監査用に残す・DELETEしない）。
 - **反映タイミング**: 次回のドラフト生成（毎日5:10 cron／mf-send の生成ボタン・日次リセット）から。**送信済み(sent)の日は再生成スキップされるため影響しない**（過去分の修正・再送は別Phase・まさし判断）。
+
+## マニュアル
+利用者向けマニュアル: https://banto.hakata-yamato.co.jp/manual/ubiregi.html （NavBarの📖からも開ける。実体は smile-mgmt/manual/）
