@@ -116,7 +116,8 @@ export default function NavBar({ stores }: { stores: StoreInfo[] }) {
                   {link.label}
                 </a>
               ))}
-              <UserMenu />
+              <a href="/manual/ubiregi.html" title="番頭さんマニュアル" className="px-2 py-1.5 rounded text-sm text-slate-300 hover:text-white hover:bg-slate-700 transition-colors whitespace-nowrap">📖</a>
+            <UserMenu />
             </div>
           </nav>
         </div>
